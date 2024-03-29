@@ -52,8 +52,8 @@ class Helper {
         forceRefresh: () => {
         },
         getAudioSampleRate: () => 48e3,
-        getAudioFrequency: (frequency) => 0,
-        getAudioFrequencies: () => new Uint8Array(1024)
+        getAudioFrequencyPower: (frequency) => 0,
+        getAudioFrequenciesPower: () => new Uint8Array(1024)
       };
     }
   }
@@ -134,11 +134,11 @@ class Asset {
   }
   getAudioFrequency(frequency) {
     var _a;
-    return ((_a = Helper.getGlobal()) == null ? void 0 : _a.getAudioFrequency(frequency)) || 0;
+    return ((_a = Helper.getGlobal()) == null ? void 0 : _a.getAudioFrequencyPower(frequency)) || 0;
   }
   getAudioFrequencies() {
     var _a;
-    return ((_a = Helper.getGlobal()) == null ? void 0 : _a.getAudioFrequencies()) || new Uint8Array(1024);
+    return ((_a = Helper.getGlobal()) == null ? void 0 : _a.getAudioFrequenciesPower()) || new Uint8Array(1024);
   }
   addProperty(general, property) {
     if (general) {
@@ -256,6 +256,16 @@ class Asset {
       group,
       type: "color",
       defaultValue,
+      general
+    };
+    this.addProperty(general, property);
+  }
+  addPropertyBoolean(general, id, defaultValue, group) {
+    const property = {
+      id,
+      group,
+      type: "boolean",
+      defaultValue: defaultValue ?? false,
       general
     };
     this.addProperty(general, property);
@@ -753,7 +763,7 @@ class DigoAssetHTML extends Asset {
     this.forceRender();
   }
   getCSSColor(value) {
-    return `#${value.toString(16)}`;
+    return `#${value.toString(16).padStart(8, "0")}`;
   }
   getFontStyles(font, width) {
     if (font) {
@@ -869,7 +879,7 @@ const defaultProperties = {
   general: {
     backgroundColor: 3435973759,
     border: {
-      color: 4473924,
+      color: 1145324799,
       size: 1,
       radius: 6
     },
@@ -888,7 +898,7 @@ const defaultProperties = {
         size: 12.84,
         weight: "bold",
         italic: false,
-        color: 4605549
+        color: 1195798015
       },
       align: "left"
     },
@@ -899,7 +909,7 @@ const defaultProperties = {
         size: 9.25,
         weight: "bold",
         italic: false,
-        color: 1973793
+        color: 505291263
       },
       align: "right"
     },
@@ -910,7 +920,7 @@ const defaultProperties = {
         size: 8.73,
         weight: "bold",
         italic: false,
-        color: 8880263
+        color: 505291263
       },
       align: "center"
     },
@@ -920,14 +930,14 @@ const defaultProperties = {
         size: 7.96,
         weight: "normal",
         italic: false,
-        color: 0
+        color: 255
       },
       subtitle: {
         family: "Kode Mono",
         size: 7.45,
         weight: "normal",
         italic: false,
-        color: 3424323
+        color: 876626943
       }
     }
   }
@@ -987,7 +997,7 @@ class BasicTitles extends DigoAssetHTML {
     const data = {
       title: "",
       subtitle: "1234567890",
-      color: 0,
+      color: 255,
       progress: 25
     };
     this.addEntity(id, data);

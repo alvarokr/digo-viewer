@@ -260,6 +260,16 @@ class Asset {
     };
     this.addProperty(general, property);
   }
+  addPropertyBoolean(general, id, defaultValue, group) {
+    const property = {
+      id,
+      group,
+      type: "boolean",
+      defaultValue: defaultValue ?? false,
+      general
+    };
+    this.addProperty(general, property);
+  }
   addPropertyOptions(general, id, defaultValue, keys, icons, group) {
     const property = {
       id,
@@ -753,7 +763,7 @@ class DigoAssetHTML extends Asset {
     this.forceRender();
   }
   getCSSColor(value) {
-    return `#${value.toString(16)}`;
+    return `#${value.toString(16).padStart(8, "0")}`;
   }
   getFontStyles(font, width) {
     if (font) {
@@ -865,7 +875,7 @@ const defaultProperties = {
   viewerWidth: 0,
   viewerHeight: 0,
   general: {
-    color: 13421772,
+    color: 3435973887,
     image: void 0,
     imageOpacity: 100,
     position: {
