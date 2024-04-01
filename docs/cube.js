@@ -53,17 +53,19 @@ class Helper {
         forceRefresh: () => {
         },
         getAudioSampleRate: () => 48e3,
-        getAudioFrequency: (frequency) => 0,
-        getAudioFrequencies: () => new Uint8Array(1024)
+        getAudioFrequencyPower: (frequency) => 0,
+        getAudioFrequenciesPower: () => new Uint8Array(1024),
+        getMIDIBender: (input) => 0,
+        getMIDINoteVelocity: (input, key) => 0,
+        getMIDIControlVelocity: (input, key) => 0,
+        getMIDINotesVelocity: (input) => [],
+        getMIDIControlsVelocity: (input) => []
       };
     }
   }
   static loadAsset(factory) {
     var _a, _b;
     (_b = (_a = Helper.getGlobal()) == null ? void 0 : _a.asset) == null ? void 0 : _b.onLoad(factory);
-  }
-  static getCanvas() {
-    return document.querySelector("canvas.digo-scene");
   }
   static getAsset(code, onLoad) {
     Helper.createGlobal();
@@ -88,6 +90,7 @@ class Helper {
     }
   }
 }
+const GENERAL_PROPERTY = true;
 const ENTITY_PROPERTY = false;
 var AssetPropertyId = /* @__PURE__ */ ((AssetPropertyId2) => {
   AssetPropertyId2["POSITION"] = "position";
@@ -99,9 +102,33 @@ var AssetPropertyId = /* @__PURE__ */ ((AssetPropertyId2) => {
   AssetPropertyId2["Z_INDEX"] = "zIndex";
   return AssetPropertyId2;
 })(AssetPropertyId || {});
+class AssetGeneralData {
+}
+class AssetEntityData {
+}
+class AssetPropertyClass {
+  constructor(definition) {
+    this.definition = definition;
+  }
+  getDefinition() {
+    return this.definition;
+  }
+  group(group) {
+    this.definition.group = group;
+    return this;
+  }
+  setter(method) {
+    this.definition.setter = method;
+    return this;
+  }
+  getter(method) {
+    this.definition.getter = method;
+    return this;
+  }
+}
 class Asset {
   constructor() {
-    this.labels = /* @__PURE__ */ new Map();
+    this.labels = {};
     this.entities = /* @__PURE__ */ new Map();
     this.generalProperties = /* @__PURE__ */ new Map();
     this.entityProperties = /* @__PURE__ */ new Map();
@@ -111,10 +138,14 @@ class Asset {
     this.entitiesPosition = /* @__PURE__ */ new Map();
   }
   getGeneralProperties() {
-    return Array.from(this.generalProperties.values());
+    return Array.from(this.generalProperties.values()).map((property) => property.getDefinition());
   }
   getEntityProperties() {
-    return Array.from(this.entityProperties.values());
+    return Array.from(this.entityProperties.values()).map((property) => property.getDefinition());
+  }
+  getPropertyDefinition(entity, id) {
+    const properties = entity ? this.getEntityProperties() : this.getGeneralProperties();
+    return properties.find((property) => property.id === id);
   }
   getLayoutPosition() {
     return "below";
@@ -125,26 +156,31 @@ class Asset {
   needsAudio() {
     return false;
   }
+  needsMIDI() {
+    return false;
+  }
   getAudioSampleRate() {
     var _a;
     return ((_a = Helper.getGlobal()) == null ? void 0 : _a.getAudioSampleRate()) || 48e3;
   }
   getAudioFrequency(frequency) {
     var _a;
-    return ((_a = Helper.getGlobal()) == null ? void 0 : _a.getAudioFrequency(frequency)) || 0;
+    return ((_a = Helper.getGlobal()) == null ? void 0 : _a.getAudioFrequencyPower(frequency)) || 0;
   }
   getAudioFrequencies() {
     var _a;
-    return ((_a = Helper.getGlobal()) == null ? void 0 : _a.getAudioFrequencies()) || new Uint8Array(1024);
+    return ((_a = Helper.getGlobal()) == null ? void 0 : _a.getAudioFrequenciesPower()) || new Uint8Array(1024);
   }
   addProperty(general, property) {
+    const propertyClass = new AssetPropertyClass(property);
     if (general) {
-      this.generalProperties.set(property.id, property);
+      this.generalProperties.set(property.id, propertyClass);
     } else {
-      this.entityProperties.set(property.id, property);
+      this.entityProperties.set(property.id, propertyClass);
     }
+    return propertyClass;
   }
-  addPropertyXYZ(general, id, canLinkValues, x, y, z, group) {
+  addPropertyXYZ(general, id, canLinkValues, x, y, z) {
     const defaultValue = {
       x: x ?? 0,
       y: y ?? 0,
@@ -152,7 +188,6 @@ class Asset {
     };
     const property = {
       id,
-      group,
       canLinkValues,
       type: "multiNumber",
       maximum: 1e3,
@@ -164,16 +199,15 @@ class Asset {
       defaultValue,
       general
     };
-    this.addProperty(general, property);
+    return this.addProperty(general, property);
   }
-  addPropertyXY(general, id, x, y, group) {
+  addPropertyXY(general, id, x, y) {
     const defaultValue = {
       x: x ?? 0,
       y: y ?? 0
     };
     const property = {
       id,
-      group,
       type: "multiNumber",
       maximum: 100,
       minimum: -100,
@@ -184,12 +218,11 @@ class Asset {
       defaultValue,
       general
     };
-    this.addProperty(general, property);
+    return this.addProperty(general, property);
   }
-  addPropertySize(general, id, defaultValue, group, other) {
+  addPropertySize(general, id, defaultValue) {
     const property = {
       id,
-      group,
       type: "multiNumber",
       maximum: 100,
       minimum: 0,
@@ -198,15 +231,13 @@ class Asset {
       defaultValue,
       general,
       keys: ["w", "h"],
-      icons: ["SwapHoriz", "SwapVert"],
-      ...other
+      icons: ["SwapHoriz", "SwapVert"]
     };
-    this.addProperty(general, property);
+    return this.addProperty(general, property);
   }
-  addPropertyNumber(general, id, minimum, maximum, decimals, step, defaultValue, group) {
+  addPropertyNumber(general, id, minimum, maximum, decimals, step, defaultValue) {
     const property = {
       id,
-      group,
       type: "number",
       maximum,
       minimum,
@@ -215,79 +246,92 @@ class Asset {
       defaultValue,
       general
     };
-    this.addProperty(general, property);
+    return this.addProperty(general, property);
   }
-  addPropertyString(general, id, defaultValue, group) {
+  addPropertyString(general, id, defaultValue) {
     const property = {
       id,
-      group,
       type: "string",
       defaultValue,
       general
     };
-    this.addProperty(general, property);
+    return this.addProperty(general, property);
   }
-  addPropertyImage(general, id, defaultValue, group) {
+  addPropertyImage(general, id, defaultValue) {
     const property = {
       id,
-      group,
       type: "image",
       defaultValue,
       general
     };
-    this.addProperty(general, property);
+    return this.addProperty(general, property);
   }
-  addPropertyFont(general, id, defaultValue, group) {
+  addPropertyFont(general, id, defaultValue) {
     const property = {
       id,
-      group,
       type: "font",
       defaultValue,
       general
     };
-    this.addProperty(general, property);
+    return this.addProperty(general, property);
   }
-  addPropertyColor(general, id, defaultValue, group) {
+  addPropertyMIDI(general, id, defaultValue) {
     const property = {
       id,
-      group,
+      type: "midi",
+      defaultValue,
+      general
+    };
+    return this.addProperty(general, property);
+  }
+  addPropertyColor(general, id, defaultValue) {
+    const property = {
+      id,
       type: "color",
       defaultValue,
       general
     };
-    this.addProperty(general, property);
+    return this.addProperty(general, property);
   }
-  addPropertyOptions(general, id, defaultValue, keys, icons, group) {
+  addPropertyBoolean(general, id, defaultValue) {
     const property = {
       id,
-      group,
+      type: "boolean",
+      defaultValue: defaultValue ?? false,
+      general
+    };
+    return this.addProperty(general, property);
+  }
+  addPropertyOptions(general, id, defaultValue, keys, icons) {
+    const property = {
+      id,
       type: "options",
       defaultValue,
       general,
       keys,
       icons
     };
-    this.addProperty(general, property);
+    return this.addProperty(general, property);
   }
   addPropertyPosition(general) {
-    this.addPropertyXYZ(
+    return this.addPropertyXYZ(
       general,
       "position"
       /* POSITION */
     );
   }
   addPropertyScale(general) {
-    this.addPropertyXYZ(general, "scale", true, 1, 1, 1);
+    return this.addPropertyXYZ(general, "scale", true, 1, 1, 1);
   }
   addPropertyRotation(general) {
-    this.addPropertyXYZ(
+    return this.addPropertyXYZ(
       general,
       "rotation"
       /* ROTATION */
     );
   }
   addPropertyGap(general) {
-    this.addPropertyXYZ(general, "gap", false, 1);
+    return this.addPropertyXYZ(general, "gap", false, 1);
   }
   addDefaultProperties(general, entity) {
     if (general) {
@@ -302,21 +346,27 @@ class Asset {
       this.addPropertyRotation(false);
     }
   }
-  getScene(extraInfo) {
-    return this.scene;
+  getContainer(extraInfo) {
+    return this.generalData.container;
   }
-  setScene(scene) {
-    this.scene = scene;
+  getGeneralData() {
+    return this.generalData;
+  }
+  setGlobalData(data) {
+    this.generalData = data;
   }
   setViewerSize(width, height) {
     this.viewerWidth = width;
     this.viewerHeight = height;
   }
-  addLabel(id, language, label) {
-    this.labels.set(`${id}-${language}`, label);
+  setLabels(labels2) {
+    this.labels = labels2;
   }
   getLabel(id, language) {
-    return this.labels.get(`${id}-${language}`) || id;
+    if (this.labels[id] && this.labels[id][language]) {
+      return this.labels[id][language];
+    }
+    return id;
   }
   createEntity(id) {
   }
@@ -330,12 +380,12 @@ class Asset {
     });
     this.entities = newEntities;
   }
-  addEntity(id, object, position = { x: 0, y: 0, z: 0 }) {
-    this.entities.set(id, object);
+  addEntity(id, data, position = { x: 0, y: 0, z: 0 }) {
+    this.entities.set(id, data);
     this.entitiesPosition.set(id, position);
   }
-  updateEntity(id, object) {
-    this.entities.set(id, object);
+  updateEntity(id, data) {
+    this.entities.set(id, data);
   }
   getEntity(id) {
     return this.entities.get(id);
@@ -358,17 +408,19 @@ class Asset {
     return (this.getEntities() || []).findIndex((value) => value === entity);
   }
   updateProperty(entity, property, value, nextUpdate = 0) {
+    var _a;
     if (entity) {
-      this.updatePropertyCommon(entity, this.getEntity(entity), property, value, nextUpdate);
+      this.updatePropertyCommon(entity, (_a = this.getEntity(entity)) == null ? void 0 : _a.component, property, value, nextUpdate);
     } else {
-      this.updatePropertyCommon(entity, this.scene, property, value, nextUpdate);
+      this.updatePropertyCommon(entity, this.getContainer(), property, value, nextUpdate);
     }
   }
   getProperty(entity, property) {
+    var _a;
     if (entity) {
-      return this.getPropertyCommon(entity, this.getEntity(entity), property);
+      return this.getPropertyCommon(entity, (_a = this.getEntity(entity)) == null ? void 0 : _a.component, property);
     }
-    return this.getPropertyCommon(entity, this.scene, property);
+    return this.getPropertyCommon(entity, this.getContainer(), property);
   }
   updatePropertyCommon(entity, object, property, value, nextUpdate = 0) {
     if (object) {
@@ -414,8 +466,8 @@ class Asset {
   }
   updatePropertyGap(entity, object, value, nextUpdate) {
     this.gap = { ...value };
-    this.entities.forEach((object2, id) => {
-      this.updatePropertyCommon(id, object2, "position", this.getPropertyPosition(id, object2), nextUpdate);
+    this.entities.forEach((data, id) => {
+      this.updatePropertyCommon(id, data.component, "position", this.getPropertyPosition(id, data.component), nextUpdate);
     });
   }
   getPropertyPosition(entity, object) {
@@ -434,14 +486,12 @@ class Asset {
   }
 }
 class DigoAssetThree extends Asset {
-  getScene() {
-    return super.getScene();
-  }
-  setScene(scene) {
-    return super.setScene(scene);
+  getContainer() {
+    return super.getContainer();
   }
   deleteEntity(id) {
-    this.getScene().remove(this.getEntity(id));
+    var _a;
+    this.getContainer().remove((_a = this.getEntity(id)) == null ? void 0 : _a.component);
     super.deleteEntity(id);
   }
   updateXYZ(entity, object, property, value, nextUpdate) {
@@ -487,7 +537,7 @@ class DigoAssetThree extends Asset {
   updatePropertyScale(entity, object, value, nextUpdate) {
     this.updateXYZ(entity, object, AssetPropertyId.SCALE, value, nextUpdate);
   }
-  updatePropertyColor(entity, object, color) {
+  updatePropertyColor(object, color) {
     var _a;
     if ((_a = object == null ? void 0 : object.material) == null ? void 0 : _a.color) {
       object.material.color.setHex(color >>> 8);
@@ -509,24 +559,74 @@ class DigoAssetThree extends Asset {
   getPropertyScale(entity, object) {
     return this.getXYZ(entity, object, AssetPropertyId.SCALE);
   }
-  getPropertyColor(entity, object) {
+  getPropertyColor(object) {
     var _a, _b;
     return Number.parseInt(`${(_b = (_a = object == null ? void 0 : object.material) == null ? void 0 : _a.color) == null ? void 0 : _b.getHex().toString(16)}ff`, 16);
+  }
+  updateProperty(entity, propertyId, value, nextUpdate = 0) {
+    let setterCalled = false;
+    const splittedProperties = propertyId.split("/");
+    const property = this.getPropertyDefinition(entity, splittedProperties[0]);
+    if (property && property.setter) {
+      const data = entity ? this.getEntity(entity) : this.getGeneralData();
+      if (data) {
+        property.setter(data, value, nextUpdate);
+        setterCalled = true;
+      }
+    }
+    if (!setterCalled) {
+      super.updateProperty(entity, propertyId, value, nextUpdate);
+    }
+  }
+  getProperty(entity, propertyId) {
+    const splittedProperties = propertyId.split("/");
+    const property = this.getPropertyDefinition(entity, splittedProperties[0]);
+    if (property && property.getter) {
+      const data = entity ? this.getEntity(entity) : this.getGeneralData();
+      if (data) {
+        return property.getter(data);
+      }
+    }
+    return super.getProperty(entity, propertyId);
   }
   tick(parameters) {
   }
 }
-class AssetBase extends DigoAssetThree {
+const labels = {
+  colorTest: {
+    en: "Color test",
+    es: "Color de pruebas"
+  }
+};
+class GeneralData extends AssetGeneralData {
   constructor() {
-    super();
+    super(...arguments);
+    this.numberGlobal = 1;
   }
 }
-class Cube extends AssetBase {
+class EntityData extends AssetEntityData {
+  constructor() {
+    super(...arguments);
+    this.numberEntity = 2;
+  }
+}
+class Cube extends DigoAssetThree {
   constructor(entities) {
     super();
+    this.setLabels(labels);
     this.addDefaultProperties(true, true);
-    this.addPropertyColor(ENTITY_PROPERTY, "color", -1);
-    this.setScene(new Scene());
+    this.addPropertyNumber(GENERAL_PROPERTY, "numberGlobal", 0, 100, 0, 1, 1).setter((data, value) => {
+      data.numberGlobal = value;
+    }).getter((data) => data.numberGlobal);
+    this.addPropertyColor(ENTITY_PROPERTY, "color", -1).setter((data, value) => {
+      this.updatePropertyColor(data.component, value);
+    }).getter((data) => this.getPropertyColor(data.component));
+    this.addPropertyNumber(ENTITY_PROPERTY, "numberEntity", 0, 100, 0, 1, 2).setter((data, value) => {
+      data.numberEntity = value;
+    }).getter((data) => data.numberEntity);
+    const globalData = new GeneralData();
+    globalData.container = new Scene();
+    this.setGlobalData(globalData);
     entities.forEach((entity) => {
       this.createEntity(entity);
     });
@@ -536,21 +636,10 @@ class Cube extends AssetBase {
     const material = new MeshStandardMaterial({ name: `${Math.random()}`, color: Math.floor(Math.random() * 16777215) });
     const mesh = new Mesh(geometry, material);
     mesh.position.x = 0;
-    this.addEntity(id, mesh);
-    this.getScene().add(mesh);
-  }
-  updateProperty(entity, property, value, nextUpdate = 0) {
-    if (entity && property === "color") {
-      this.updatePropertyColor(entity, this.getEntity(entity), value);
-    } else {
-      super.updateProperty(entity, property, value, nextUpdate);
-    }
-  }
-  getProperty(entity, property) {
-    if (entity && property === "color") {
-      return this.getPropertyColor(entity, this.getEntity(entity));
-    }
-    return super.getProperty(entity, property);
+    const entityData = new EntityData();
+    entityData.component = mesh;
+    this.addEntity(id, entityData);
+    this.getContainer().add(mesh);
   }
 }
 const digoAssetData = {

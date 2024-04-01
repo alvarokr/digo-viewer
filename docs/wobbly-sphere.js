@@ -1,4 +1,4 @@
-import { M as MathUtils, a as Material, U as Uniform, C as Color, S as Scene, I as IcosahedronGeometry, b as MeshPhysicalMaterial, c as MeshDepthMaterial, R as RGBADepthPacking, d as Mesh } from "./three.js";
+import { M as MathUtils, a as Material, B as BufferAttribute, C as Color, S as Scene, I as IcosahedronGeometry, b as MeshPhysicalMaterial, D as DoubleSide, c as MeshDepthMaterial, R as RGBADepthPacking, d as Mesh, U as Uniform } from "./three.js";
 (function polyfill() {
   const relList = document.createElement("link").relList;
   if (relList && relList.supports && relList.supports("modulepreload")) {
@@ -54,16 +54,18 @@ class Helper {
         },
         getAudioSampleRate: () => 48e3,
         getAudioFrequencyPower: (frequency) => 0,
-        getAudioFrequenciesPower: () => new Uint8Array(1024)
+        getAudioFrequenciesPower: () => new Uint8Array(1024),
+        getMIDIBender: (input) => 0,
+        getMIDINoteVelocity: (input, key) => 0,
+        getMIDIControlVelocity: (input, key) => 0,
+        getMIDINotesVelocity: (input) => [],
+        getMIDIControlsVelocity: (input) => []
       };
     }
   }
   static loadAsset(factory) {
     var _a, _b;
     (_b = (_a = Helper.getGlobal()) == null ? void 0 : _a.asset) == null ? void 0 : _b.onLoad(factory);
-  }
-  static getCanvas() {
-    return document.querySelector("canvas.digo-scene");
   }
   static getAsset(code, onLoad) {
     Helper.createGlobal();
@@ -99,9 +101,33 @@ var AssetPropertyId = /* @__PURE__ */ ((AssetPropertyId2) => {
   AssetPropertyId2["Z_INDEX"] = "zIndex";
   return AssetPropertyId2;
 })(AssetPropertyId || {});
+class AssetGeneralData {
+}
+class AssetEntityData {
+}
+class AssetPropertyClass {
+  constructor(definition) {
+    this.definition = definition;
+  }
+  getDefinition() {
+    return this.definition;
+  }
+  group(group) {
+    this.definition.group = group;
+    return this;
+  }
+  setter(method) {
+    this.definition.setter = method;
+    return this;
+  }
+  getter(method) {
+    this.definition.getter = method;
+    return this;
+  }
+}
 class Asset {
   constructor() {
-    this.labels = /* @__PURE__ */ new Map();
+    this.labels = {};
     this.entities = /* @__PURE__ */ new Map();
     this.generalProperties = /* @__PURE__ */ new Map();
     this.entityProperties = /* @__PURE__ */ new Map();
@@ -111,10 +137,14 @@ class Asset {
     this.entitiesPosition = /* @__PURE__ */ new Map();
   }
   getGeneralProperties() {
-    return Array.from(this.generalProperties.values());
+    return Array.from(this.generalProperties.values()).map((property) => property.getDefinition());
   }
   getEntityProperties() {
-    return Array.from(this.entityProperties.values());
+    return Array.from(this.entityProperties.values()).map((property) => property.getDefinition());
+  }
+  getPropertyDefinition(entity, id) {
+    const properties = entity ? this.getEntityProperties() : this.getGeneralProperties();
+    return properties.find((property) => property.id === id);
   }
   getLayoutPosition() {
     return "below";
@@ -123,6 +153,9 @@ class Asset {
     return 0;
   }
   needsAudio() {
+    return false;
+  }
+  needsMIDI() {
     return false;
   }
   getAudioSampleRate() {
@@ -138,13 +171,15 @@ class Asset {
     return ((_a = Helper.getGlobal()) == null ? void 0 : _a.getAudioFrequenciesPower()) || new Uint8Array(1024);
   }
   addProperty(general, property) {
+    const propertyClass = new AssetPropertyClass(property);
     if (general) {
-      this.generalProperties.set(property.id, property);
+      this.generalProperties.set(property.id, propertyClass);
     } else {
-      this.entityProperties.set(property.id, property);
+      this.entityProperties.set(property.id, propertyClass);
     }
+    return propertyClass;
   }
-  addPropertyXYZ(general, id, canLinkValues, x, y, z, group) {
+  addPropertyXYZ(general, id, canLinkValues, x, y, z) {
     const defaultValue = {
       x: x ?? 0,
       y: y ?? 0,
@@ -152,7 +187,6 @@ class Asset {
     };
     const property = {
       id,
-      group,
       canLinkValues,
       type: "multiNumber",
       maximum: 1e3,
@@ -164,16 +198,15 @@ class Asset {
       defaultValue,
       general
     };
-    this.addProperty(general, property);
+    return this.addProperty(general, property);
   }
-  addPropertyXY(general, id, x, y, group) {
+  addPropertyXY(general, id, x, y) {
     const defaultValue = {
       x: x ?? 0,
       y: y ?? 0
     };
     const property = {
       id,
-      group,
       type: "multiNumber",
       maximum: 100,
       minimum: -100,
@@ -184,12 +217,11 @@ class Asset {
       defaultValue,
       general
     };
-    this.addProperty(general, property);
+    return this.addProperty(general, property);
   }
-  addPropertySize(general, id, defaultValue, group, other) {
+  addPropertySize(general, id, defaultValue) {
     const property = {
       id,
-      group,
       type: "multiNumber",
       maximum: 100,
       minimum: 0,
@@ -198,15 +230,13 @@ class Asset {
       defaultValue,
       general,
       keys: ["w", "h"],
-      icons: ["SwapHoriz", "SwapVert"],
-      ...other
+      icons: ["SwapHoriz", "SwapVert"]
     };
-    this.addProperty(general, property);
+    return this.addProperty(general, property);
   }
-  addPropertyNumber(general, id, minimum, maximum, decimals, step, defaultValue, group) {
+  addPropertyNumber(general, id, minimum, maximum, decimals, step, defaultValue) {
     const property = {
       id,
-      group,
       type: "number",
       maximum,
       minimum,
@@ -215,89 +245,92 @@ class Asset {
       defaultValue,
       general
     };
-    this.addProperty(general, property);
+    return this.addProperty(general, property);
   }
-  addPropertyString(general, id, defaultValue, group) {
+  addPropertyString(general, id, defaultValue) {
     const property = {
       id,
-      group,
       type: "string",
       defaultValue,
       general
     };
-    this.addProperty(general, property);
+    return this.addProperty(general, property);
   }
-  addPropertyImage(general, id, defaultValue, group) {
+  addPropertyImage(general, id, defaultValue) {
     const property = {
       id,
-      group,
       type: "image",
       defaultValue,
       general
     };
-    this.addProperty(general, property);
+    return this.addProperty(general, property);
   }
-  addPropertyFont(general, id, defaultValue, group) {
+  addPropertyFont(general, id, defaultValue) {
     const property = {
       id,
-      group,
       type: "font",
       defaultValue,
       general
     };
-    this.addProperty(general, property);
+    return this.addProperty(general, property);
   }
-  addPropertyColor(general, id, defaultValue, group) {
+  addPropertyMIDI(general, id, defaultValue) {
     const property = {
       id,
-      group,
+      type: "midi",
+      defaultValue,
+      general
+    };
+    return this.addProperty(general, property);
+  }
+  addPropertyColor(general, id, defaultValue) {
+    const property = {
+      id,
       type: "color",
       defaultValue,
       general
     };
-    this.addProperty(general, property);
+    return this.addProperty(general, property);
   }
-  addPropertyBoolean(general, id, defaultValue, group) {
+  addPropertyBoolean(general, id, defaultValue) {
     const property = {
       id,
-      group,
       type: "boolean",
       defaultValue: defaultValue ?? false,
       general
     };
-    this.addProperty(general, property);
+    return this.addProperty(general, property);
   }
-  addPropertyOptions(general, id, defaultValue, keys, icons, group) {
+  addPropertyOptions(general, id, defaultValue, keys, icons) {
     const property = {
       id,
-      group,
       type: "options",
       defaultValue,
       general,
       keys,
       icons
     };
-    this.addProperty(general, property);
+    return this.addProperty(general, property);
   }
   addPropertyPosition(general) {
-    this.addPropertyXYZ(
+    return this.addPropertyXYZ(
       general,
       "position"
       /* POSITION */
     );
   }
   addPropertyScale(general) {
-    this.addPropertyXYZ(general, "scale", true, 1, 1, 1);
+    return this.addPropertyXYZ(general, "scale", true, 1, 1, 1);
   }
   addPropertyRotation(general) {
-    this.addPropertyXYZ(
+    return this.addPropertyXYZ(
       general,
       "rotation"
       /* ROTATION */
     );
   }
   addPropertyGap(general) {
-    this.addPropertyXYZ(general, "gap", false, 1);
+    return this.addPropertyXYZ(general, "gap", false, 1);
   }
   addDefaultProperties(general, entity) {
     if (general) {
@@ -312,21 +345,27 @@ class Asset {
       this.addPropertyRotation(false);
     }
   }
-  getScene(extraInfo) {
-    return this.scene;
+  getContainer(extraInfo) {
+    return this.generalData.container;
   }
-  setScene(scene) {
-    this.scene = scene;
+  getGeneralData() {
+    return this.generalData;
+  }
+  setGlobalData(data) {
+    this.generalData = data;
   }
   setViewerSize(width, height) {
     this.viewerWidth = width;
     this.viewerHeight = height;
   }
-  addLabel(id, language, label) {
-    this.labels.set(`${id}-${language}`, label);
+  setLabels(labels2) {
+    this.labels = labels2;
   }
   getLabel(id, language) {
-    return this.labels.get(`${id}-${language}`) || id;
+    if (this.labels[id] && this.labels[id][language]) {
+      return this.labels[id][language];
+    }
+    return id;
   }
   createEntity(id) {
   }
@@ -340,12 +379,12 @@ class Asset {
     });
     this.entities = newEntities;
   }
-  addEntity(id, object, position = { x: 0, y: 0, z: 0 }) {
-    this.entities.set(id, object);
+  addEntity(id, data, position = { x: 0, y: 0, z: 0 }) {
+    this.entities.set(id, data);
     this.entitiesPosition.set(id, position);
   }
-  updateEntity(id, object) {
-    this.entities.set(id, object);
+  updateEntity(id, data) {
+    this.entities.set(id, data);
   }
   getEntity(id) {
     return this.entities.get(id);
@@ -368,17 +407,19 @@ class Asset {
     return (this.getEntities() || []).findIndex((value) => value === entity);
   }
   updateProperty(entity, property, value, nextUpdate = 0) {
+    var _a;
     if (entity) {
-      this.updatePropertyCommon(entity, this.getEntity(entity), property, value, nextUpdate);
+      this.updatePropertyCommon(entity, (_a = this.getEntity(entity)) == null ? void 0 : _a.component, property, value, nextUpdate);
     } else {
-      this.updatePropertyCommon(entity, this.scene, property, value, nextUpdate);
+      this.updatePropertyCommon(entity, this.getContainer(), property, value, nextUpdate);
     }
   }
   getProperty(entity, property) {
+    var _a;
     if (entity) {
-      return this.getPropertyCommon(entity, this.getEntity(entity), property);
+      return this.getPropertyCommon(entity, (_a = this.getEntity(entity)) == null ? void 0 : _a.component, property);
     }
-    return this.getPropertyCommon(entity, this.scene, property);
+    return this.getPropertyCommon(entity, this.getContainer(), property);
   }
   updatePropertyCommon(entity, object, property, value, nextUpdate = 0) {
     if (object) {
@@ -424,8 +465,8 @@ class Asset {
   }
   updatePropertyGap(entity, object, value, nextUpdate) {
     this.gap = { ...value };
-    this.entities.forEach((object2, id) => {
-      this.updatePropertyCommon(id, object2, "position", this.getPropertyPosition(id, object2), nextUpdate);
+    this.entities.forEach((data, id) => {
+      this.updatePropertyCommon(id, data.component, "position", this.getPropertyPosition(id, data.component), nextUpdate);
     });
   }
   getPropertyPosition(entity, object) {
@@ -444,14 +485,12 @@ class Asset {
   }
 }
 class DigoAssetThree extends Asset {
-  getScene() {
-    return super.getScene();
-  }
-  setScene(scene) {
-    return super.setScene(scene);
+  getContainer() {
+    return super.getContainer();
   }
   deleteEntity(id) {
-    this.getScene().remove(this.getEntity(id));
+    var _a;
+    this.getContainer().remove((_a = this.getEntity(id)) == null ? void 0 : _a.component);
     super.deleteEntity(id);
   }
   updateXYZ(entity, object, property, value, nextUpdate) {
@@ -497,7 +536,7 @@ class DigoAssetThree extends Asset {
   updatePropertyScale(entity, object, value, nextUpdate) {
     this.updateXYZ(entity, object, AssetPropertyId.SCALE, value, nextUpdate);
   }
-  updatePropertyColor(entity, object, color) {
+  updatePropertyColor(object, color) {
     var _a;
     if ((_a = object == null ? void 0 : object.material) == null ? void 0 : _a.color) {
       object.material.color.setHex(color >>> 8);
@@ -519,9 +558,35 @@ class DigoAssetThree extends Asset {
   getPropertyScale(entity, object) {
     return this.getXYZ(entity, object, AssetPropertyId.SCALE);
   }
-  getPropertyColor(entity, object) {
+  getPropertyColor(object) {
     var _a, _b;
     return Number.parseInt(`${(_b = (_a = object == null ? void 0 : object.material) == null ? void 0 : _a.color) == null ? void 0 : _b.getHex().toString(16)}ff`, 16);
+  }
+  updateProperty(entity, propertyId, value, nextUpdate = 0) {
+    let setterCalled = false;
+    const splittedProperties = propertyId.split("/");
+    const property = this.getPropertyDefinition(entity, splittedProperties[0]);
+    if (property && property.setter) {
+      const data = entity ? this.getEntity(entity) : this.getGeneralData();
+      if (data) {
+        property.setter(data, value, nextUpdate);
+        setterCalled = true;
+      }
+    }
+    if (!setterCalled) {
+      super.updateProperty(entity, propertyId, value, nextUpdate);
+    }
+  }
+  getProperty(entity, propertyId) {
+    const splittedProperties = propertyId.split("/");
+    const property = this.getPropertyDefinition(entity, splittedProperties[0]);
+    if (property && property.getter) {
+      const data = entity ? this.getEntity(entity) : this.getGeneralData();
+      if (data) {
+        return property.getter(data);
+      }
+    }
+    return super.getProperty(entity, propertyId);
   }
   tick(parameters) {
   }
@@ -531,8 +596,54 @@ class AssetBase extends DigoAssetThree {
     super();
   }
 }
-var vertex_default = "uniform float uTime;\nuniform float uPositionFrequency;\nuniform float uTimeFrequency;\nuniform float uStrength;\nuniform float uWarpPositionFrequency;\nuniform float uWarpTimeFrequency;\nuniform float uWarpStrength;\n\nattribute vec4 tangent;\n\nvarying float vWobble;\n\nvec4 permute(vec4 x){return mod(((x*34.0)+1.0)*x, 289.0);}\nfloat permute(float x){return floor(mod(((x*34.0)+1.0)*x, 289.0));}\nvec4 taylorInvSqrt(vec4 r){return 1.79284291400159 - 0.85373472095314 * r;}\nfloat taylorInvSqrt(float r){return 1.79284291400159 - 0.85373472095314 * r;}\n\nvec4 grad4(float j, vec4 ip)\n{\n  const vec4 ones = vec4(1.0, 1.0, 1.0, -1.0);\n  vec4 p,s;\n\n  p.xyz = floor( fract (vec3(j) * ip.xyz) * 7.0) * ip.z - 1.0;\n  p.w = 1.5 - dot(abs(p.xyz), ones.xyz);\n  s = vec4(lessThan(p, vec4(0.0)));\n  p.xyz = p.xyz + (s.xyz*2.0 - 1.0) * s.www; \n\n  return p;\n}\n\nfloat simplexNoise4d(vec4 v)\n{\n  const vec2  C = vec2( 0.138196601125010504,  \n                        0.309016994374947451); \n  \n  vec4 i  = floor(v + dot(v, C.yyyy) );\n  vec4 x0 = v -   i + dot(i, C.xxxx);\n\n  \n\n  \n  vec4 i0;\n\n  vec3 isX = step( x0.yzw, x0.xxx );\n  vec3 isYZ = step( x0.zww, x0.yyz );\n  \n  i0.x = isX.x + isX.y + isX.z;\n  i0.yzw = 1.0 - isX;\n\n  \n  i0.y += isYZ.x + isYZ.y;\n  i0.zw += 1.0 - isYZ.xy;\n\n  i0.z += isYZ.z;\n  i0.w += 1.0 - isYZ.z;\n\n  \n  vec4 i3 = clamp( i0, 0.0, 1.0 );\n  vec4 i2 = clamp( i0-1.0, 0.0, 1.0 );\n  vec4 i1 = clamp( i0-2.0, 0.0, 1.0 );\n\n  \n  vec4 x1 = x0 - i1 + 1.0 * C.xxxx;\n  vec4 x2 = x0 - i2 + 2.0 * C.xxxx;\n  vec4 x3 = x0 - i3 + 3.0 * C.xxxx;\n  vec4 x4 = x0 - 1.0 + 4.0 * C.xxxx;\n\n  \n  i = mod(i, 289.0); \n  float j0 = permute( permute( permute( permute(i.w) + i.z) + i.y) + i.x);\n  vec4 j1 = permute( permute( permute( permute (\n             i.w + vec4(i1.w, i2.w, i3.w, 1.0 ))\n           + i.z + vec4(i1.z, i2.z, i3.z, 1.0 ))\n           + i.y + vec4(i1.y, i2.y, i3.y, 1.0 ))\n           + i.x + vec4(i1.x, i2.x, i3.x, 1.0 ));\n  \n  \n  \n\n  vec4 ip = vec4(1.0/294.0, 1.0/49.0, 1.0/7.0, 0.0) ;\n\n  vec4 p0 = grad4(j0,   ip);\n  vec4 p1 = grad4(j1.x, ip);\n  vec4 p2 = grad4(j1.y, ip);\n  vec4 p3 = grad4(j1.z, ip);\n  vec4 p4 = grad4(j1.w, ip);\n\n  \n  vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2, p2), dot(p3,p3)));\n  p0 *= norm.x;\n  p1 *= norm.y;\n  p2 *= norm.z;\n  p3 *= norm.w;\n  p4 *= taylorInvSqrt(dot(p4,p4));\n\n  \n  vec3 m0 = max(0.6 - vec3(dot(x0,x0), dot(x1,x1), dot(x2,x2)), 0.0);\n  vec2 m1 = max(0.6 - vec2(dot(x3,x3), dot(x4,x4)            ), 0.0);\n  m0 = m0 * m0;\n  m1 = m1 * m1;\n  return 49.0 * ( dot(m0*m0, vec3( dot( p0, x0 ), dot( p1, x1 ), dot( p2, x2 )))\n               + dot(m1*m1, vec2( dot( p3, x3 ), dot( p4, x4 ) ) ) ) ;\n\n}\n\nfloat getWobble(vec3 position)\n{\n    vec3 warpedPosition = position;\n    warpedPosition += simplexNoise4d(\n        vec4(\n            position * uWarpPositionFrequency,\n            uTime * uWarpTimeFrequency\n        )\n    ) * uWarpStrength;\n\n    return simplexNoise4d(vec4(\n        warpedPosition * uPositionFrequency, \n        uTime * uTimeFrequency         \n    )) * uStrength;\n}\n\nvoid main()\n{\n    vec3 biTangent = cross(normal, tangent.xyz);\n\n    \n    float shift = 0.01;\n    vec3 positionA = csm_Position + tangent.xyz * shift;\n    vec3 positionB = csm_Position + biTangent * shift;\n\n    \n    float wobble = getWobble(csm_Position);\n    csm_Position += wobble * normal;\n    positionA    += getWobble(positionA) * normal;\n    positionB    += getWobble(positionB) * normal;\n\n    \n    vec3 toA = normalize(positionA - csm_Position);\n    vec3 toB = normalize(positionB - csm_Position);\n    csm_Normal = cross(toA, toB);\n\n    \n    vWobble = wobble / uStrength;\n}";
-var fragment_default = "uniform vec3 uColorA;\nuniform vec3 uColorB;\n\nvarying float vWobble;\n\nvoid main()\n{\n    float colorMix = smoothstep(- 1.0, 1.0, vWobble);\n    csm_DiffuseColor.rgb = mix(uColorA, uColorB, colorMix);\n\n    \n    \n    \n\n    \n    csm_Roughness = 1.0 - colorMix;\n}";
+var vertex_default = "uniform float uTime;\nuniform float uFrequency;\nuniform float uSpeed;\nuniform float uStrength;\nuniform float uWarp;\nuniform float uWarpSpeed;\nuniform float uWarpStrength;\n\nattribute vec4 tangent;\n\nvarying float vWobble;\n\nvec4 permute(vec4 x){return mod(((x*34.0)+1.0)*x, 289.0);}\nfloat permute(float x){return floor(mod(((x*34.0)+1.0)*x, 289.0));}\nvec4 taylorInvSqrt(vec4 r){return 1.79284291400159 - 0.85373472095314 * r;}\nfloat taylorInvSqrt(float r){return 1.79284291400159 - 0.85373472095314 * r;}\n\nvec4 grad4(float j, vec4 ip)\n{\n  const vec4 ones = vec4(1.0, 1.0, 1.0, -1.0);\n  vec4 p,s;\n\n  p.xyz = floor( fract (vec3(j) * ip.xyz) * 7.0) * ip.z - 1.0;\n  p.w = 1.5 - dot(abs(p.xyz), ones.xyz);\n  s = vec4(lessThan(p, vec4(0.0)));\n  p.xyz = p.xyz + (s.xyz*2.0 - 1.0) * s.www; \n\n  return p;\n}\n\nfloat simplexNoise4d(vec4 v)\n{\n  const vec2  C = vec2( 0.138196601125010504,  \n                        0.309016994374947451); \n  \n  vec4 i  = floor(v + dot(v, C.yyyy) );\n  vec4 x0 = v -   i + dot(i, C.xxxx);\n\n  \n\n  \n  vec4 i0;\n\n  vec3 isX = step( x0.yzw, x0.xxx );\n  vec3 isYZ = step( x0.zww, x0.yyz );\n  \n  i0.x = isX.x + isX.y + isX.z;\n  i0.yzw = 1.0 - isX;\n\n  \n  i0.y += isYZ.x + isYZ.y;\n  i0.zw += 1.0 - isYZ.xy;\n\n  i0.z += isYZ.z;\n  i0.w += 1.0 - isYZ.z;\n\n  \n  vec4 i3 = clamp( i0, 0.0, 1.0 );\n  vec4 i2 = clamp( i0-1.0, 0.0, 1.0 );\n  vec4 i1 = clamp( i0-2.0, 0.0, 1.0 );\n\n  \n  vec4 x1 = x0 - i1 + 1.0 * C.xxxx;\n  vec4 x2 = x0 - i2 + 2.0 * C.xxxx;\n  vec4 x3 = x0 - i3 + 3.0 * C.xxxx;\n  vec4 x4 = x0 - 1.0 + 4.0 * C.xxxx;\n\n  \n  i = mod(i, 289.0); \n  float j0 = permute( permute( permute( permute(i.w) + i.z) + i.y) + i.x);\n  vec4 j1 = permute( permute( permute( permute (\n             i.w + vec4(i1.w, i2.w, i3.w, 1.0 ))\n           + i.z + vec4(i1.z, i2.z, i3.z, 1.0 ))\n           + i.y + vec4(i1.y, i2.y, i3.y, 1.0 ))\n           + i.x + vec4(i1.x, i2.x, i3.x, 1.0 ));\n  \n  \n  \n\n  vec4 ip = vec4(1.0/294.0, 1.0/49.0, 1.0/7.0, 0.0) ;\n\n  vec4 p0 = grad4(j0,   ip);\n  vec4 p1 = grad4(j1.x, ip);\n  vec4 p2 = grad4(j1.y, ip);\n  vec4 p3 = grad4(j1.z, ip);\n  vec4 p4 = grad4(j1.w, ip);\n\n  \n  vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2, p2), dot(p3,p3)));\n  p0 *= norm.x;\n  p1 *= norm.y;\n  p2 *= norm.z;\n  p3 *= norm.w;\n  p4 *= taylorInvSqrt(dot(p4,p4));\n\n  \n  vec3 m0 = max(0.6 - vec3(dot(x0,x0), dot(x1,x1), dot(x2,x2)), 0.0);\n  vec2 m1 = max(0.6 - vec2(dot(x3,x3), dot(x4,x4)            ), 0.0);\n  m0 = m0 * m0;\n  m1 = m1 * m1;\n  return 49.0 * ( dot(m0*m0, vec3( dot( p0, x0 ), dot( p1, x1 ), dot( p2, x2 )))\n               + dot(m1*m1, vec2( dot( p3, x3 ), dot( p4, x4 ) ) ) ) ;\n\n}\n\nfloat getWobble(vec3 position)\n{\n    vec3 warpedPosition = position;\n    warpedPosition += simplexNoise4d(\n        vec4(\n            position * uWarp,\n            uTime * uWarpSpeed\n        )\n    ) * uWarpStrength;\n\n    return simplexNoise4d(vec4(\n        warpedPosition * uFrequency, \n        uTime * uSpeed         \n    )) * uStrength;\n}\n\nvoid main()\n{\n    vec3 biTangent = cross(normal, tangent.xyz);\n\n    \n    float shift = 0.01;\n    vec3 positionA = csm_Position + tangent.xyz * shift;\n    vec3 positionB = csm_Position + biTangent * shift;\n\n    \n    float wobble = getWobble(csm_Position);\n    csm_Position += wobble * normal;\n    positionA    += getWobble(positionA) * normal;\n    positionB    += getWobble(positionB) * normal;\n\n    \n    vec3 toA = normalize(positionA - csm_Position);\n    vec3 toB = normalize(positionB - csm_Position);\n    csm_Normal = cross(toA, toB);\n\n    \n    vWobble = wobble / uStrength;\n}";
+var fragment_default = "uniform vec3 uFirstColor;\nuniform vec3 uSecondColor;\n\nvarying float vWobble;\n\nvoid main()\n{\n    float colorMix = smoothstep(- 1.0, 1.0, vWobble);\n    csm_DiffuseColor.rgb = mix(uFirstColor, uSecondColor, colorMix);\n\n    \n    \n    \n\n    \n    csm_Roughness = 1.0 - colorMix;\n}";
+const labels = {
+  uFrequency: {
+    en: "Frequency",
+    es: "Frecuencia"
+  },
+  uSpeed: {
+    en: "Speed",
+    es: "Velocidad"
+  },
+  uStrength: {
+    en: "Strength",
+    es: "Fuerza"
+  },
+  uWarp: {
+    en: "Warp",
+    es: "Deformación"
+  },
+  uWarpSpeed: {
+    en: "Warp speed",
+    es: "Velocidad deformación"
+  },
+  uWarpStrength: {
+    en: "Warp strength",
+    es: "Fuerza deformación"
+  },
+  uFirstColor: {
+    en: "First color",
+    es: "Primer color"
+  },
+  uSecondColor: {
+    en: "Second color",
+    es: "Segundo color"
+  },
+  metalness: {
+    en: "Metalness",
+    es: "Metalidad"
+  },
+  transmission: {
+    en: "Transmission",
+    es: "Transmisión"
+  },
+  ior: {
+    en: "Index of refraction",
+    es: "Índice de refracción"
+  }
+};
 function commonjsRequire(path) {
   throw new Error('Could not dynamically require "' + path + '". Please configure the dynamicRequireTargets or/and ignoreDynamicRequires option of @rollup/plugin-commonjs appropriately for this require call to work.');
 }
@@ -2851,102 +2962,198 @@ var CustomShaderMaterial = /* @__PURE__ */ function(_THREE$Material) {
   }]);
   return CustomShaderMaterial2;
 }(Material);
-const WOBBLY_UNIFORMS = {
-  shaderUniforms: {
-    uTime: new Uniform(0),
-    uPositionFrequency: new Uniform(0.5),
-    uTimeFrequency: new Uniform(0.4),
-    uStrength: new Uniform(0.3),
-    uWarpPositionFrequency: new Uniform(0.38),
-    uWarpTimeFrequency: new Uniform(0.12),
-    uWarpStrength: new Uniform(1.7),
-    uColorA: new Uniform(new Color(16777215)),
-    uColorB: new Uniform(new Color(16777215))
-  },
-  materialProps: {
-    roughness: 0.5,
-    metalness: 0.5,
-    transmission: 0,
-    ior: 0,
-    thickness: 1
+function mergeVertices(geometry, tolerance = 1e-4) {
+  tolerance = Math.max(tolerance, Number.EPSILON);
+  const hashToIndex = {};
+  const indices = geometry.getIndex();
+  const positions = geometry.getAttribute("position");
+  const vertexCount = indices ? indices.count : positions.count;
+  let nextIndex = 0;
+  const attributeNames = Object.keys(geometry.attributes);
+  const tmpAttributes = {};
+  const tmpMorphAttributes = {};
+  const newIndices = [];
+  const getters = ["getX", "getY", "getZ", "getW"];
+  const setters = ["setX", "setY", "setZ", "setW"];
+  for (let i = 0, l = attributeNames.length; i < l; i++) {
+    const name = attributeNames[i];
+    const attr = geometry.attributes[name];
+    tmpAttributes[name] = new BufferAttribute(
+      new attr.array.constructor(attr.count * attr.itemSize),
+      attr.itemSize,
+      attr.normalized
+    );
+    const morphAttr = geometry.morphAttributes[name];
+    if (morphAttr) {
+      tmpMorphAttributes[name] = new BufferAttribute(
+        new morphAttr.array.constructor(morphAttr.count * morphAttr.itemSize),
+        morphAttr.itemSize,
+        morphAttr.normalized
+      );
+    }
   }
+  const halfTolerance = tolerance * 0.5;
+  const exponent = Math.log10(1 / tolerance);
+  const hashMultiplier = Math.pow(10, exponent);
+  const hashAdditive = halfTolerance * hashMultiplier;
+  for (let i = 0; i < vertexCount; i++) {
+    const index = indices ? indices.getX(i) : i;
+    let hash = "";
+    for (let j = 0, l = attributeNames.length; j < l; j++) {
+      const name = attributeNames[j];
+      const attribute = geometry.getAttribute(name);
+      const itemSize = attribute.itemSize;
+      for (let k = 0; k < itemSize; k++) {
+        hash += `${~~(attribute[getters[k]](index) * hashMultiplier + hashAdditive)},`;
+      }
+    }
+    if (hash in hashToIndex) {
+      newIndices.push(hashToIndex[hash]);
+    } else {
+      for (let j = 0, l = attributeNames.length; j < l; j++) {
+        const name = attributeNames[j];
+        const attribute = geometry.getAttribute(name);
+        const morphAttr = geometry.morphAttributes[name];
+        const itemSize = attribute.itemSize;
+        const newarray = tmpAttributes[name];
+        const newMorphArrays = tmpMorphAttributes[name];
+        for (let k = 0; k < itemSize; k++) {
+          const getterFunc = getters[k];
+          const setterFunc = setters[k];
+          newarray[setterFunc](nextIndex, attribute[getterFunc](index));
+          if (morphAttr) {
+            for (let m = 0, ml = morphAttr.length; m < ml; m++) {
+              newMorphArrays[m][setterFunc](nextIndex, morphAttr[m][getterFunc](index));
+            }
+          }
+        }
+      }
+      hashToIndex[hash] = nextIndex;
+      newIndices.push(nextIndex);
+      nextIndex++;
+    }
+  }
+  const result = geometry.clone();
+  for (const name in geometry.attributes) {
+    const tmpAttribute = tmpAttributes[name];
+    result.setAttribute(name, new BufferAttribute(
+      tmpAttribute.array.slice(0, nextIndex * tmpAttribute.itemSize),
+      tmpAttribute.itemSize,
+      tmpAttribute.normalized
+    ));
+    if (!(name in tmpMorphAttributes))
+      continue;
+    for (let j = 0; j < tmpMorphAttributes[name].length; j++) {
+      const tmpMorphAttribute = tmpMorphAttributes[name][j];
+      result.morphAttributes[name][j] = new BufferAttribute(
+        tmpMorphAttribute.array.slice(0, nextIndex * tmpMorphAttribute.itemSize),
+        tmpMorphAttribute.itemSize,
+        tmpMorphAttribute.normalized
+      );
+    }
+  }
+  result.setIndex(newIndices);
+  return result;
+}
+const DEFAULTS = {
+  uFrequency: 0.2,
+  uSpeed: 0.5,
+  uStrength: 2,
+  uWarp: 1,
+  uWarpSpeed: 0.1,
+  uWarpStrength: 0.5,
+  uFirstColor: 16711680,
+  uSecondColor: 16711935,
+  metalness: 0.25,
+  transmission: 0,
+  ior: 1
 };
+class GeneralData extends AssetGeneralData {
+}
+class EntityData extends AssetEntityData {
+  constructor() {
+    super(...arguments);
+    this.shader = {
+      uTime: new Uniform(0),
+      uFrequency: new Uniform(DEFAULTS.uFrequency),
+      uSpeed: new Uniform(DEFAULTS.uSpeed),
+      uStrength: new Uniform(DEFAULTS.uStrength),
+      uWarp: new Uniform(DEFAULTS.uWarp),
+      uWarpSpeed: new Uniform(DEFAULTS.uWarpSpeed),
+      uWarpStrength: new Uniform(DEFAULTS.uWarpStrength),
+      uFirstColor: new Uniform(new Color(DEFAULTS.uFirstColor)),
+      uSecondColor: new Uniform(new Color(DEFAULTS.uSecondColor))
+    };
+  }
+}
 class WobblySphere extends AssetBase {
   constructor(entities) {
     super();
-    this.entitiesProps = /* @__PURE__ */ new Map();
-    this.addLabel("frequency", "en", "Frequency");
-    this.addLabel("frequency", "es", "Frecuencia");
-    this.addLabel("speed", "en", "Speed");
-    this.addLabel("speed", "es", "Velocidad");
-    this.addLabel("strength", "en", "Strength");
-    this.addLabel("strength", "es", "Fuerza");
-    this.addLabel("warp", "en", "Warp");
-    this.addLabel("warp", "es", "Deformacion");
-    this.addLabel("warpSpeed", "en", "Warp Speed");
-    this.addLabel("warpSpeed", "es", "Velocidad deformación");
-    this.addLabel("warpStrength", "en", "Warp Strength");
-    this.addLabel("warpStrength", "es", "Fuerza deformación");
-    this.addLabel("firstColor", "en", "First Color");
-    this.addLabel("firstColor", "es", "Primer Color");
-    this.addLabel("secondColor", "en", "Second Color");
-    this.addLabel("secondColor", "es", "Segundo Color");
-    this.addLabel("metalness", "en", "Metalness");
-    this.addLabel("metalness", "es", "Metalidad");
-    this.addLabel("roughness", "en", "Roughness");
-    this.addLabel("roughness", "es", "Rugosidad");
-    this.addLabel("transmission", "en", "Transmission");
-    this.addLabel("transmission", "es", "Transmisión");
-    this.addLabel("ior", "en", "Ior");
-    this.addLabel("ior", "es", "Ior");
-    this.addLabel("thickness", "en", "Thickness");
-    this.addLabel("thickness", "es", "Grosor");
+    this.setLabels(labels);
     this.addDefaultProperties(true, true);
-    this.addPropertyNumber(ENTITY_PROPERTY, "frequency", 0, 2, 2, 0.01, WOBBLY_UNIFORMS.shaderUniforms.uPositionFrequency.value);
-    this.addPropertyNumber(ENTITY_PROPERTY, "speed", 0, 2, 2, 0.01, WOBBLY_UNIFORMS.shaderUniforms.uTimeFrequency.value);
-    this.addPropertyNumber(ENTITY_PROPERTY, "strength", 0, 2, 2, 0.01, WOBBLY_UNIFORMS.shaderUniforms.uStrength.value);
-    this.addPropertyNumber(ENTITY_PROPERTY, "warp", 0, 2, 2, 0.01, WOBBLY_UNIFORMS.shaderUniforms.uWarpPositionFrequency.value);
-    this.addPropertyNumber(ENTITY_PROPERTY, "warpSpeed", 0, 2, 2, 0.01, WOBBLY_UNIFORMS.shaderUniforms.uWarpTimeFrequency.value);
-    this.addPropertyNumber(ENTITY_PROPERTY, "warpStrength", 0, 2, 2, 0.01, WOBBLY_UNIFORMS.shaderUniforms.uWarpStrength.value);
-    this.addPropertyColor(ENTITY_PROPERTY, "firstColor", WOBBLY_UNIFORMS.shaderUniforms.uColorA.value.getHex());
-    this.addPropertyColor(ENTITY_PROPERTY, "secondColor", WOBBLY_UNIFORMS.shaderUniforms.uColorB.value.getHex());
-    this.addPropertyNumber(ENTITY_PROPERTY, "metalness", 0, 1, 2, 0.01, WOBBLY_UNIFORMS.materialProps.metalness);
-    this.addPropertyNumber(ENTITY_PROPERTY, "roughness", 0, 1, 2, 0.01, WOBBLY_UNIFORMS.materialProps.roughness);
-    this.addPropertyNumber(ENTITY_PROPERTY, "transmission", 0, 1, 2, 0.01, WOBBLY_UNIFORMS.materialProps.transmission);
-    this.addPropertyNumber(ENTITY_PROPERTY, "ior", 0, 10, 2, 0.01, WOBBLY_UNIFORMS.materialProps.ior);
-    this.addPropertyNumber(ENTITY_PROPERTY, "thickness", 0, 10, 2, 0.01, WOBBLY_UNIFORMS.materialProps.thickness);
-    this.setScene(new Scene());
+    this.addPropertyNumber(ENTITY_PROPERTY, "uFrequency", 0, 2, 2, 0.01, DEFAULTS.uFrequency).setter((data, value) => {
+      data.shader.uFrequency.value = value;
+    }).getter((data) => data.shader.uFrequency.value);
+    this.addPropertyNumber(ENTITY_PROPERTY, "uSpeed", 0, 4, 2, 0.01, DEFAULTS.uSpeed).setter((data, value) => {
+      data.shader.uSpeed.value = value;
+    }).getter((data) => data.shader.uSpeed.value);
+    this.addPropertyNumber(ENTITY_PROPERTY, "uStrength", 0, 5, 2, 0.01, DEFAULTS.uStrength).setter((data, value) => {
+      data.shader.uStrength.value = value;
+    }).getter((data) => data.shader.uStrength.value);
+    this.addPropertyNumber(ENTITY_PROPERTY, "uWarp", 0, 10, 2, 0.01, DEFAULTS.uWarp).setter((data, value) => {
+      data.shader.uWarp.value = value;
+    }).getter((data) => data.shader.uWarp.value);
+    this.addPropertyNumber(ENTITY_PROPERTY, "uWarpSpeed", 0, 2, 2, 0.01, DEFAULTS.uWarpSpeed).setter((data, value) => {
+      data.shader.uWarpSpeed.value = value;
+    }).getter((data) => data.shader.uWarpSpeed.value);
+    this.addPropertyNumber(ENTITY_PROPERTY, "uWarpStrength", 0, 1, 2, 0.01, DEFAULTS.uWarpStrength).setter((data, value) => {
+      data.shader.uWarpStrength.value = value;
+    }).getter((data) => data.shader.uWarpStrength.value);
+    this.addPropertyColor(ENTITY_PROPERTY, "uFirstColor", DEFAULTS.uFirstColor).setter((data, value) => {
+      data.shader.uFirstColor.value = new Color(value >>> 8);
+    }).getter((data) => Number.parseInt(`${data.shader.uFirstColor.value.getHex().toString(16)}ff`, 16));
+    this.addPropertyColor(ENTITY_PROPERTY, "uSecondColor", DEFAULTS.uSecondColor).setter((data, value) => {
+      data.shader.uSecondColor.value = new Color(value >>> 8);
+    }).getter((data) => Number.parseInt(`${data.shader.uSecondColor.value.getHex().toString(16)}ff`, 16));
+    this.addPropertyNumber(ENTITY_PROPERTY, "metalness", 0, 1, 2, 0.01, DEFAULTS.metalness).setter((data, value) => {
+      data.component.material.metalness = value;
+    }).getter((data) => data.component.material.metalness);
+    this.addPropertyNumber(ENTITY_PROPERTY, "transmission", 0, 2, 2, 0.01, DEFAULTS.transmission).setter((data, value) => {
+      data.component.material.transmission = value;
+    }).getter((data) => data.component.material.transmission);
+    this.addPropertyNumber(ENTITY_PROPERTY, "ior", 0, 1, 2, 0.01, DEFAULTS.ior).setter((data, value) => {
+      data.component.material.ior = value;
+    }).getter((data) => data.component.material.ior);
+    const globalData = new GeneralData();
+    globalData.container = new Scene();
+    this.setGlobalData(globalData);
     entities.forEach((entity) => {
       this.createEntity(entity);
     });
   }
   createEntity(id) {
-    var _a, _b, _c, _d, _e, _f, _g;
-    this.entitiesProps.set(id, JSON.parse(JSON.stringify(WOBBLY_UNIFORMS)));
-    let geometry = new IcosahedronGeometry(2.5, 50);
+    const entityData = new EntityData();
+    let geometry = mergeVertices(new IcosahedronGeometry(2.5, 50));
     geometry.computeTangents();
     const material = new CustomShaderMaterial({
-      // CSM
       baseMaterial: MeshPhysicalMaterial,
       vertexShader: vertex_default,
       fragmentShader: fragment_default,
-      uniforms: (_a = this.entitiesProps.get(id)) == null ? void 0 : _a.shaderUniforms,
+      uniforms: entityData.shader,
       silent: true,
       // MeshPhysicalMaterial
-      metalness: (_b = this.entitiesProps.get(id)) == null ? void 0 : _b.materialProps.metalness,
-      roughness: (_c = this.entitiesProps.get(id)) == null ? void 0 : _c.materialProps.roughness,
-      color: "#ffffff",
-      transmission: (_d = this.entitiesProps.get(id)) == null ? void 0 : _d.materialProps.transmission,
-      ior: (_e = this.entitiesProps.get(id)) == null ? void 0 : _e.materialProps.ior,
-      thickness: (_f = this.entitiesProps.get(id)) == null ? void 0 : _f.materialProps.thickness,
+      metalness: DEFAULTS.metalness,
+      color: 16777215,
+      transmission: DEFAULTS.transmission,
+      ior: DEFAULTS.ior,
       transparent: true,
-      wireframe: false
+      wireframe: false,
+      side: DoubleSide
     });
     const depthMaterial = new CustomShaderMaterial({
-      // CSM
       baseMaterial: MeshDepthMaterial,
       vertexShader: vertex_default,
-      uniforms: (_g = this.entitiesProps.get(id)) == null ? void 0 : _g.shaderUniforms,
+      uniforms: entityData.shader,
       silent: true,
       // MeshDepthMaterial
       depthPacking: RGBADepthPacking
@@ -2955,114 +3162,14 @@ class WobblySphere extends AssetBase {
     mesh.customDepthMaterial = depthMaterial;
     mesh.receiveShadow = true;
     mesh.castShadow = true;
-    this.addEntity(id, mesh);
-    this.getScene().add(mesh);
+    entityData.component = mesh;
+    this.addEntity(id, entityData);
+    this.getContainer().add(mesh);
   }
-  // update properties
-  updateProperty(entity, property, value, nextUpdate = 0) {
-    if (entity) {
-      switch (property) {
-        case "frequency":
-          this.entitiesProps.get(entity).shaderUniforms.uPositionFrequency.value = value;
-          break;
-        case "speed":
-          this.entitiesProps.get(entity).shaderUniforms.uTimeFrequency.value = value;
-          break;
-        case "strength":
-          this.entitiesProps.get(entity).shaderUniforms.uStrength.value = value;
-          break;
-        case "warp":
-          this.entitiesProps.get(entity).shaderUniforms.uWarpPositionFrequency.value = value;
-          break;
-        case "warpSpeed":
-          this.entitiesProps.get(entity).shaderUniforms.uWarpTimeFrequency.value = value;
-          break;
-        case "warpStrength":
-          this.entitiesProps.get(entity).shaderUniforms.uWarpStrength.value = value;
-          break;
-        case "metalness":
-          if (this.getEntity(entity).material.metalness != void 0) {
-            this.getEntity(entity).material.metalness = value;
-            this.entitiesProps.get(entity).materialProps.metalness = value;
-          }
-          break;
-        case "roughness":
-          if (this.getEntity(entity).material.roughness != void 0) {
-            this.getEntity(entity).material.roughness = value;
-            this.entitiesProps.get(entity).materialProps.roughness = value;
-          }
-          break;
-        case "transmission":
-          if (this.getEntity(entity).material.transmission != void 0) {
-            this.getEntity(entity).material.transmission = value;
-            this.entitiesProps.get(entity).materialProps.transmission = value;
-          }
-          break;
-        case "ior":
-          if (this.getEntity(entity).material.ior != void 0) {
-            this.getEntity(entity).material.ior = value;
-            this.entitiesProps.get(entity).materialProps.ior = value;
-          }
-          break;
-        case "thickness":
-          if (this.getEntity(entity).material.thickness != void 0) {
-            this.getEntity(entity).material.thickness = value;
-            this.entitiesProps.get(entity).materialProps.thickness = value;
-          }
-          break;
-        case "firstColor":
-          this.entitiesProps.get(entity).shaderUniforms.uColorA.value = new Color(value >>> 8);
-          break;
-        case "secondColor":
-          this.entitiesProps.get(entity).shaderUniforms.uColorB.value = new Color(value >>> 8);
-          break;
-        default:
-          super.updateProperty(entity, property, value, nextUpdate);
-      }
-    } else {
-      super.updateProperty(entity, property, value, nextUpdate);
-    }
-  }
-  // get Properties
-  getProperty(entity, property) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m;
-    if (entity) {
-      switch (property) {
-        case "frequency":
-          return (_a = this.entitiesProps.get(entity)) == null ? void 0 : _a.shaderUniforms.uPositionFrequency.value;
-        case "speed":
-          return (_b = this.entitiesProps.get(entity)) == null ? void 0 : _b.shaderUniforms.uTimeFrequency.value;
-        case "strength":
-          return (_c = this.entitiesProps.get(entity)) == null ? void 0 : _c.shaderUniforms.uStrength.value;
-        case "warp":
-          return (_d = this.entitiesProps.get(entity)) == null ? void 0 : _d.shaderUniforms.uWarpPositionFrequency.value;
-        case "warpSpeed":
-          return (_e = this.entitiesProps.get(entity)) == null ? void 0 : _e.shaderUniforms.uWarpTimeFrequency.value;
-        case "warpStrength":
-          return (_f = this.entitiesProps.get(entity)) == null ? void 0 : _f.shaderUniforms.uWarpStrength.value;
-        case "firstColor":
-          return ((((_g = this.entitiesProps.get(entity)) == null ? void 0 : _g.shaderUniforms.uColorA.value) || 0) << 8) + 255;
-        case "secondColor":
-          return ((((_h = this.entitiesProps.get(entity)) == null ? void 0 : _h.shaderUniforms.uColorB.value) || 0) << 8) + 255;
-        case "metalness":
-          return (_i = this.entitiesProps.get(entity)) == null ? void 0 : _i.materialProps.metalnes;
-        case "roughness":
-          return (_j = this.entitiesProps.get(entity)) == null ? void 0 : _j.materialProps.roughness;
-        case "transmission":
-          return (_k = this.entitiesProps.get(entity)) == null ? void 0 : _k.materialProps.transmission;
-        case "ior":
-          return (_l = this.entitiesProps.get(entity)) == null ? void 0 : _l.materialProps.ior;
-        case "thickness":
-          return (_m = this.entitiesProps.get(entity)) == null ? void 0 : _m.materialProps.thickness;
-      }
-    }
-    return super.getProperty(entity, property);
-  }
-  // tick
   tick(parameters) {
     this.getEntities().forEach((entityName) => {
       if (this.getEntity(entityName)) {
-        this.entitiesProps.get(entityName).shaderUniforms.uTime.value = parameters.elapsedTime;
+        this.getEntity(entityName).shader.uTime.value = parameters.elapsedTime;
       }
     });
     super.tick(parameters);
