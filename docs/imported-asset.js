@@ -1,4 +1,4 @@
-import { T as TrianglesDrawMode, a as TriangleFanDrawMode, b as TriangleStripDrawMode, L as Loader, c as LoaderUtils, F as FileLoader, C as Color, d as LinearSRGBColorSpace, S as SpotLight, P as PointLight, D as DirectionalLight, M as MeshBasicMaterial, e as SRGBColorSpace, f as MeshPhysicalMaterial, V as Vector2, g as Matrix4, I as InstancedMesh, h as InstancedBufferAttribute, O as Object3D, i as TextureLoader, j as ImageBitmapLoader, B as BufferAttribute, k as InterleavedBuffer, l as LinearFilter, m as LinearMipmapLinearFilter, R as RepeatWrapping, n as PointsMaterial, o as Material, p as LineBasicMaterial, q as MeshStandardMaterial, r as DoubleSide, s as PropertyBinding, t as BufferGeometry, u as SkinnedMesh, v as Mesh, w as LineSegments, x as Line, y as LineLoop, z as Points, G as Group, A as PerspectiveCamera, E as MathUtils, H as OrthographicCamera, J as Skeleton, K as AnimationClip, N as Bone, Q as InterpolateLinear, U as ColorManagement, W as Vector3, X as Quaternion, Y as NearestFilter, Z as NearestMipmapNearestFilter, _ as LinearMipmapNearestFilter, $ as NearestMipmapLinearFilter, a0 as ClampToEdgeWrapping, a1 as MirroredRepeatWrapping, a2 as InterpolateDiscrete, a3 as FrontSide, a4 as InterleavedBufferAttribute, a5 as Texture, a6 as VectorKeyframeTrack, a7 as NumberKeyframeTrack, a8 as QuaternionKeyframeTrack, a9 as Box3, aa as Sphere, ab as Interpolant, ac as Scene } from "./three.js";
+import { T as TrianglesDrawMode, a as TriangleFanDrawMode, b as TriangleStripDrawMode, L as Loader, c as LoaderUtils, F as FileLoader, C as Color, d as LinearSRGBColorSpace, S as SpotLight, P as PointLight, D as DirectionalLight, M as MeshBasicMaterial, e as SRGBColorSpace, f as MeshPhysicalMaterial, V as Vector2, g as Matrix4, h as Vector3, I as InstancedMesh, i as InstancedBufferAttribute, O as Object3D, j as TextureLoader, k as ImageBitmapLoader, B as BufferAttribute, l as InterleavedBuffer, m as LinearFilter, n as LinearMipmapLinearFilter, R as RepeatWrapping, o as PointsMaterial, p as Material, q as LineBasicMaterial, r as MeshStandardMaterial, s as DoubleSide, t as PropertyBinding, u as BufferGeometry, v as SkinnedMesh, w as Mesh, x as LineSegments, y as Line, z as LineLoop, A as Points, G as Group, E as PerspectiveCamera, H as MathUtils, J as OrthographicCamera, K as Skeleton, N as AnimationClip, Q as Bone, U as InterpolateLinear, W as ColorManagement, X as Quaternion, Y as NearestFilter, Z as NearestMipmapNearestFilter, _ as LinearMipmapNearestFilter, $ as NearestMipmapLinearFilter, a0 as ClampToEdgeWrapping, a1 as MirroredRepeatWrapping, a2 as InterpolateDiscrete, a3 as FrontSide, a4 as InterleavedBufferAttribute, a5 as Texture, a6 as VectorKeyframeTrack, a7 as NumberKeyframeTrack, a8 as QuaternionKeyframeTrack, a9 as Box3, aa as Sphere, ab as Interpolant, ac as Scene } from "./three.js";
 (function polyfill() {
   const relList = document.createElement("link").relList;
   if (relList && relList.supports && relList.supports("modulepreload")) {
@@ -50,6 +50,9 @@ class Helper {
         asset: {},
         loadFont: (fontName) => {
         },
+        loadResourceAsBase64: (id) => {
+        },
+        getResourceURL: (id) => "",
         forceRefresh: () => {
         },
         getAudioSampleRate: () => 48e3,
@@ -90,6 +93,7 @@ class Helper {
     }
   }
 }
+const GENERAL_PROPERTY = true;
 var AssetPropertyId = /* @__PURE__ */ ((AssetPropertyId2) => {
   AssetPropertyId2["POSITION"] = "position";
   AssetPropertyId2["SCALE"] = "scale";
@@ -262,6 +266,15 @@ class Asset {
     };
     return this.addProperty(general, property);
   }
+  addPropertyObject3D(general, id, defaultValue) {
+    const property = {
+      id,
+      type: "object3d",
+      defaultValue,
+      general
+    };
+    return this.addProperty(general, property);
+  }
   addPropertyFont(general, id, defaultValue) {
     const property = {
       id,
@@ -348,7 +361,7 @@ class Asset {
   getGeneralData() {
     return this.generalData;
   }
-  setGlobalData(data) {
+  setGeneralData(data) {
     this.generalData = data;
   }
   setViewerSize(width, height) {
@@ -481,119 +494,6 @@ class Asset {
   tick(parameters) {
   }
 }
-class DigoAssetThree extends Asset {
-  getContainer() {
-    return super.getContainer();
-  }
-  deleteEntity(id) {
-    var _a;
-    this.getContainer().remove((_a = this.getEntity(id)) == null ? void 0 : _a.component);
-    super.deleteEntity(id);
-  }
-  updateXYZ(entity, object, property, value, nextUpdate) {
-    if (object[property]) {
-      const x = value.x ?? object[property].x;
-      const y = value.y ?? object[property].y;
-      const z = value.z ?? object[property].z;
-      object[property].x = x;
-      object[property].y = y;
-      object[property].z = z;
-    }
-  }
-  getXYZ(entity, object, property) {
-    var _a, _b, _c;
-    const result = {
-      x: ((_a = object[property]) == null ? void 0 : _a.x) ?? 0,
-      y: ((_b = object[property]) == null ? void 0 : _b.y) ?? 0,
-      z: ((_c = object[property]) == null ? void 0 : _c.z) ?? 0
-    };
-    if (entity && property === AssetPropertyId.POSITION) {
-      result.x -= this.gap.x;
-      result.y -= this.gap.y;
-      result.z -= this.gap.z;
-    }
-    return result;
-  }
-  updatePropertyPosition(entity, object, value, nextUpdate) {
-    if (entity) {
-      const finalPosition = {
-        x: value.x === void 0 ? void 0 : value.x + this.getEntityIndex(entity) * this.gap.x,
-        y: value.y === void 0 ? void 0 : value.y + this.getEntityIndex(entity) * this.gap.y,
-        z: value.z === void 0 ? void 0 : value.z + this.getEntityIndex(entity) * this.gap.z
-      };
-      this.setEntityPosition(entity, value);
-      this.updateXYZ(entity, object, AssetPropertyId.POSITION, finalPosition, nextUpdate);
-    } else {
-      this.updateXYZ(entity, object, AssetPropertyId.POSITION, value, nextUpdate);
-    }
-  }
-  updatePropertyRotation(entity, object, value, nextUpdate) {
-    this.updateXYZ(entity, object, AssetPropertyId.ROTATION, value, nextUpdate);
-  }
-  updatePropertyScale(entity, object, value, nextUpdate) {
-    this.updateXYZ(entity, object, AssetPropertyId.SCALE, value, nextUpdate);
-  }
-  updatePropertyColor(object, color) {
-    var _a;
-    if ((_a = object == null ? void 0 : object.material) == null ? void 0 : _a.color) {
-      object.material.color.setHex(color >>> 8);
-    }
-  }
-  getPropertyPosition(entity, object) {
-    if (entity) {
-      const xyz = { ...this.getEntityPosition(entity) ?? { x: 0, y: 0, z: 0 } };
-      xyz.x = xyz.x ?? 0;
-      xyz.y = xyz.y ?? 0;
-      xyz.z = xyz.z ?? 0;
-      return xyz;
-    }
-    return this.getXYZ(entity, object, AssetPropertyId.POSITION);
-  }
-  getPropertyRotation(entity, object) {
-    return this.getXYZ(entity, object, AssetPropertyId.ROTATION);
-  }
-  getPropertyScale(entity, object) {
-    return this.getXYZ(entity, object, AssetPropertyId.SCALE);
-  }
-  getPropertyColor(object) {
-    var _a, _b;
-    return Number.parseInt(`${(_b = (_a = object == null ? void 0 : object.material) == null ? void 0 : _a.color) == null ? void 0 : _b.getHex().toString(16)}ff`, 16);
-  }
-  updateProperty(entity, propertyId, value, nextUpdate = 0) {
-    let setterCalled = false;
-    const splittedProperties = propertyId.split("/");
-    const property = this.getPropertyDefinition(entity, splittedProperties[0]);
-    if (property && property.setter) {
-      const data = entity ? this.getEntity(entity) : this.getGeneralData();
-      if (data) {
-        if (splittedProperties.length === 2 && property.getter) {
-          const objectValue = property.getter(data);
-          objectValue[splittedProperties[1]] = value;
-          property.setter(data, objectValue, nextUpdate);
-        } else {
-          property.setter(data, value, nextUpdate);
-        }
-        setterCalled = true;
-      }
-    }
-    if (!setterCalled) {
-      super.updateProperty(entity, propertyId, value, nextUpdate);
-    }
-  }
-  getProperty(entity, propertyId) {
-    const splittedProperties = propertyId.split("/");
-    const property = this.getPropertyDefinition(entity, splittedProperties[0]);
-    if (property && property.getter) {
-      const data = entity ? this.getEntity(entity) : this.getGeneralData();
-      if (data) {
-        return property.getter(data);
-      }
-    }
-    return super.getProperty(entity, propertyId);
-  }
-  tick(parameters) {
-  }
-}
 function toTrianglesDrawMode(geometry, drawMode) {
   if (drawMode === TrianglesDrawMode) {
     console.warn("THREE.BufferGeometryUtils.toTrianglesDrawMode(): Geometry already defined as triangles.");
@@ -692,6 +592,9 @@ class GLTFLoader extends Loader {
       return new GLTFMaterialsAnisotropyExtension(parser);
     });
     this.register(function(parser) {
+      return new GLTFMaterialsBumpExtension(parser);
+    });
+    this.register(function(parser) {
       return new GLTFLightsExtension(parser);
     });
     this.register(function(parser) {
@@ -707,7 +610,8 @@ class GLTFLoader extends Loader {
     if (this.resourcePath !== "") {
       resourcePath = this.resourcePath;
     } else if (this.path !== "") {
-      resourcePath = this.path;
+      const relativeUrl = LoaderUtils.extractUrlBase(url);
+      resourcePath = LoaderUtils.resolveURL(relativeUrl, this.path);
     } else {
       resourcePath = LoaderUtils.extractUrlBase(url);
     }
@@ -880,6 +784,7 @@ const EXTENSIONS = {
   KHR_TEXTURE_TRANSFORM: "KHR_texture_transform",
   KHR_MESH_QUANTIZATION: "KHR_mesh_quantization",
   KHR_MATERIALS_EMISSIVE_STRENGTH: "KHR_materials_emissive_strength",
+  EXT_MATERIALS_BUMP: "EXT_materials_bump",
   EXT_TEXTURE_WEBP: "EXT_texture_webp",
   EXT_TEXTURE_AVIF: "EXT_texture_avif",
   EXT_MESHOPT_COMPRESSION: "EXT_meshopt_compression",
@@ -1251,6 +1156,33 @@ class GLTFMaterialsSpecularExtension {
     return Promise.all(pending);
   }
 }
+class GLTFMaterialsBumpExtension {
+  constructor(parser) {
+    this.parser = parser;
+    this.name = EXTENSIONS.EXT_MATERIALS_BUMP;
+  }
+  getMaterialType(materialIndex) {
+    const parser = this.parser;
+    const materialDef = parser.json.materials[materialIndex];
+    if (!materialDef.extensions || !materialDef.extensions[this.name])
+      return null;
+    return MeshPhysicalMaterial;
+  }
+  extendMaterialParams(materialIndex, materialParams) {
+    const parser = this.parser;
+    const materialDef = parser.json.materials[materialIndex];
+    if (!materialDef.extensions || !materialDef.extensions[this.name]) {
+      return Promise.resolve();
+    }
+    const pending = [];
+    const extension = materialDef.extensions[this.name];
+    materialParams.bumpScale = extension.bumpFactor !== void 0 ? extension.bumpFactor : 1;
+    if (extension.bumpTexture !== void 0) {
+      pending.push(parser.assignTexture(materialParams, "bumpMap", extension.bumpTexture));
+    }
+    return Promise.all(pending);
+  }
+}
 class GLTFMaterialsAnisotropyExtension {
   constructor(parser) {
     this.parser = parser;
@@ -1586,7 +1518,7 @@ class GLTFDracoMeshCompressionExtension {
       }
     }
     return parser.getDependency("bufferView", bufferViewIndex).then(function(bufferView) {
-      return new Promise(function(resolve) {
+      return new Promise(function(resolve, reject) {
         dracoLoader.decodeDracoFile(bufferView, function(geometry) {
           for (const attributeName in geometry.attributes) {
             const attribute = geometry.attributes[attributeName];
@@ -1595,7 +1527,7 @@ class GLTFDracoMeshCompressionExtension {
               attribute.normalized = normalized;
           }
           resolve(geometry);
-        }, threeAttributeMap, attributeTypeMap);
+        }, threeAttributeMap, attributeTypeMap, LinearSRGBColorSpace, reject);
       });
     });
   }
@@ -1979,6 +1911,9 @@ class GLTFParser {
       return Promise.all(parser._invokeAll(function(ext) {
         return ext.afterRoot && ext.afterRoot(result);
       })).then(function() {
+        for (const scene of result.scenes) {
+          scene.updateMatrixWorld();
+        }
         onLoad(result);
       });
     }).catch(onError);
@@ -3129,32 +3064,154 @@ function addPrimitiveAttributes(geometry, primitiveDef, parser) {
     return primitiveDef.targets !== void 0 ? addMorphTargets(geometry, primitiveDef.targets, parser) : geometry;
   });
 }
+class DigoAssetThree extends Asset {
+  getContainer() {
+    return super.getContainer();
+  }
+  deleteEntity(id) {
+    var _a;
+    this.getContainer().remove((_a = this.getEntity(id)) == null ? void 0 : _a.component);
+    super.deleteEntity(id);
+  }
+  updateXYZ(entity, object, property, value, nextUpdate) {
+    if (object[property]) {
+      const x = value.x ?? object[property].x;
+      const y = value.y ?? object[property].y;
+      const z = value.z ?? object[property].z;
+      object[property].x = x;
+      object[property].y = y;
+      object[property].z = z;
+    }
+  }
+  getXYZ(entity, object, property) {
+    var _a, _b, _c;
+    const result = {
+      x: ((_a = object[property]) == null ? void 0 : _a.x) ?? 0,
+      y: ((_b = object[property]) == null ? void 0 : _b.y) ?? 0,
+      z: ((_c = object[property]) == null ? void 0 : _c.z) ?? 0
+    };
+    if (entity && property === AssetPropertyId.POSITION) {
+      result.x -= this.gap.x;
+      result.y -= this.gap.y;
+      result.z -= this.gap.z;
+    }
+    return result;
+  }
+  updatePropertyPosition(entity, object, value, nextUpdate) {
+    if (entity) {
+      const finalPosition = {
+        x: value.x === void 0 ? void 0 : value.x + this.getEntityIndex(entity) * this.gap.x,
+        y: value.y === void 0 ? void 0 : value.y + this.getEntityIndex(entity) * this.gap.y,
+        z: value.z === void 0 ? void 0 : value.z + this.getEntityIndex(entity) * this.gap.z
+      };
+      this.setEntityPosition(entity, value);
+      this.updateXYZ(entity, object, AssetPropertyId.POSITION, finalPosition, nextUpdate);
+    } else {
+      this.updateXYZ(entity, object, AssetPropertyId.POSITION, value, nextUpdate);
+    }
+  }
+  updatePropertyRotation(entity, object, value, nextUpdate) {
+    this.updateXYZ(entity, object, AssetPropertyId.ROTATION, value, nextUpdate);
+  }
+  updatePropertyScale(entity, object, value, nextUpdate) {
+    this.updateXYZ(entity, object, AssetPropertyId.SCALE, value, nextUpdate);
+  }
+  updatePropertyColor(object, color) {
+    var _a;
+    if ((_a = object == null ? void 0 : object.material) == null ? void 0 : _a.color) {
+      object.material.color.setHex(color >>> 8);
+    }
+  }
+  getPropertyPosition(entity, object) {
+    if (entity) {
+      const xyz = { ...this.getEntityPosition(entity) ?? { x: 0, y: 0, z: 0 } };
+      xyz.x = xyz.x ?? 0;
+      xyz.y = xyz.y ?? 0;
+      xyz.z = xyz.z ?? 0;
+      return xyz;
+    }
+    return this.getXYZ(entity, object, AssetPropertyId.POSITION);
+  }
+  getPropertyRotation(entity, object) {
+    return this.getXYZ(entity, object, AssetPropertyId.ROTATION);
+  }
+  getPropertyScale(entity, object) {
+    return this.getXYZ(entity, object, AssetPropertyId.SCALE);
+  }
+  getPropertyColor(object) {
+    var _a, _b;
+    return Number.parseInt(`${(_b = (_a = object == null ? void 0 : object.material) == null ? void 0 : _a.color) == null ? void 0 : _b.getHex().toString(16)}ff`, 16);
+  }
+  updateProperty(entity, propertyId, value, nextUpdate = 0) {
+    let setterCalled = false;
+    const splittedProperties = propertyId.split("/");
+    const property = this.getPropertyDefinition(entity, splittedProperties[0]);
+    if (property && property.setter) {
+      const data = entity ? this.getEntity(entity) : this.getGeneralData();
+      if (data) {
+        if (splittedProperties.length === 2 && property.getter) {
+          const objectValue = property.getter(data);
+          objectValue[splittedProperties[1]] = value;
+          property.setter(data, objectValue, nextUpdate);
+        } else {
+          property.setter(data, value, nextUpdate);
+        }
+        setterCalled = true;
+      }
+    }
+    if (!setterCalled) {
+      super.updateProperty(entity, propertyId, value, nextUpdate);
+    }
+  }
+  getProperty(entity, propertyId) {
+    const splittedProperties = propertyId.split("/");
+    const property = this.getPropertyDefinition(entity, splittedProperties[0]);
+    if (property && property.getter) {
+      const data = entity ? this.getEntity(entity) : this.getGeneralData();
+      if (data) {
+        return property.getter(data);
+      }
+    }
+    return super.getProperty(entity, propertyId);
+  }
+  loadGLTF(id, onLoad) {
+    var _a;
+    if (id) {
+      const url = (_a = Helper.getGlobal()) == null ? void 0 : _a.getResourceURL(id);
+      console.log({ url });
+      const loader = new GLTFLoader();
+      loader.load(url, onLoad);
+    }
+  }
+  tick(parameters) {
+  }
+}
 class GeneralData extends AssetGeneralData {
+  constructor() {
+    super(...arguments);
+    this.objectId = "";
+  }
 }
 class ImportedAsset extends DigoAssetThree {
   constructor() {
     super();
     this.addDefaultProperties(true, false);
-    const globalData = new GeneralData();
-    globalData.container = new Scene();
-    globalData.container.scale.x = 4.5;
-    globalData.container.scale.y = 4.5;
-    globalData.container.scale.z = 4.5;
-    this.setGlobalData(globalData);
-    const loader = new GLTFLoader();
-    loader.load(
-      "http://localhost:9000/buster-drone.glb",
-      (gltf) => {
-        console.log(gltf);
-        globalData.container.add(gltf.scene);
-      },
-      (xhr) => {
-        console.log(`${xhr.loaded / xhr.total * 100}% loaded`);
-      },
-      (error) => {
-        console.log("An error happened:", error);
-      }
-    );
+    this.addPropertyObject3D(GENERAL_PROPERTY, "3D Object", "").setter((data, value) => {
+      this.setObject(data, value);
+    }).getter((data) => data.objectId);
+    const generalData = new GeneralData();
+    generalData.container = new Scene();
+    generalData.container.scale.x = 0.2;
+    generalData.container.scale.y = 0.2;
+    generalData.container.scale.z = 0.2;
+    this.setGeneralData(generalData);
+  }
+  setObject(data, id) {
+    console.log({ id });
+    this.loadGLTF(id, (gltf) => {
+      data.container.add(gltf.scene);
+    });
+    data.objectId = id;
   }
 }
 const digoAssetData = {

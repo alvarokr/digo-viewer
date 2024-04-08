@@ -49,6 +49,8 @@ class Helper {
         asset: {},
         loadFont: (fontName) => {
         },
+        loadResourceAsBase64: (id) => {
+        },
         forceRefresh: () => {
         },
         getAudioSampleRate: () => 48e3,
@@ -265,6 +267,15 @@ class Asset {
     };
     return this.addProperty(general, property);
   }
+  addPropertyObject3D(general, id, defaultValue) {
+    const property = {
+      id,
+      type: "object3d",
+      defaultValue,
+      general
+    };
+    return this.addProperty(general, property);
+  }
   addPropertyFont(general, id, defaultValue) {
     const property = {
       id,
@@ -351,7 +362,7 @@ class Asset {
   getGeneralData() {
     return this.generalData;
   }
-  setGlobalData(data) {
+  setGeneralData(data) {
     this.generalData = data;
   }
   setViewerSize(width, height) {

@@ -1,4 +1,4 @@
-import { S as Scene, B as BoxGeometry, M as MeshStandardMaterial, a as Mesh } from "./three.js";
+import { G as GLTFLoader, S as Scene, B as BoxGeometry, M as MeshStandardMaterial, a as Mesh } from "./three.js";
 (function polyfill() {
   const relList = document.createElement("link").relList;
   if (relList && relList.supports && relList.supports("modulepreload")) {
@@ -50,6 +50,9 @@ class Helper {
         asset: {},
         loadFont: (fontName) => {
         },
+        loadResourceAsBase64: (id) => {
+        },
+        getResourceURL: (id) => "",
         forceRefresh: () => {
         },
         getAudioSampleRate: () => 48e3,
@@ -265,6 +268,15 @@ class Asset {
     };
     return this.addProperty(general, property);
   }
+  addPropertyObject3D(general, id, defaultValue) {
+    const property = {
+      id,
+      type: "object3d",
+      defaultValue,
+      general
+    };
+    return this.addProperty(general, property);
+  }
   addPropertyFont(general, id, defaultValue) {
     const property = {
       id,
@@ -351,7 +363,7 @@ class Asset {
   getGeneralData() {
     return this.generalData;
   }
-  setGlobalData(data) {
+  setGeneralData(data) {
     this.generalData = data;
   }
   setViewerSize(width, height) {
@@ -594,6 +606,15 @@ class DigoAssetThree extends Asset {
     }
     return super.getProperty(entity, propertyId);
   }
+  loadGLTF(id, onLoad) {
+    var _a;
+    if (id) {
+      const url = (_a = Helper.getGlobal()) == null ? void 0 : _a.getResourceURL(id);
+      console.log({ url });
+      const loader = new GLTFLoader();
+      loader.load(url, onLoad);
+    }
+  }
   tick(parameters) {
   }
 }
@@ -615,9 +636,9 @@ class Cube extends DigoAssetThree {
     this.addPropertyColor(ENTITY_PROPERTY, "color", -1).setter((data, value) => {
       this.updatePropertyColor(data.component, value);
     }).getter((data) => this.getPropertyColor(data.component));
-    const globalData = new GeneralData();
-    globalData.container = new Scene();
-    this.setGlobalData(globalData);
+    const generalData = new GeneralData();
+    generalData.container = new Scene();
+    this.setGeneralData(generalData);
     entities.forEach((entity) => {
       this.createEntity(entity);
     });
