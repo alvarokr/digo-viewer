@@ -89,6 +89,8 @@ class Helper {
     }
   }
 }
+const GENERAL_PROPERTY = true;
+const ENTITY_PROPERTY = false;
 var LayoutPosition = /* @__PURE__ */ ((LayoutPosition2) => {
   LayoutPosition2["BELOW"] = "below";
   LayoutPosition2["ABOVE"] = "above";
@@ -1037,21 +1039,21 @@ class BasicTitles extends DigoAssetHTML {
   initialize(properties) {
     var _a, _b, _c, _d, _e;
     this.properties = properties;
-    this.addPropertyXY(true, AssetPropertyId.POSITION, this.properties.general.position.x, this.properties.general.position.y);
-    this.addPropertySize(true, AssetPropertyId.SIZE, { w: this.properties.general.size.w, h: this.properties.general.size.h });
-    this.addPropertyColor(true, "backgroundColor", this.properties.general.backgroundColor);
-    this.addPropertyNumber(true, "border/size", 0, 1e3, 0, 1, this.properties.general.border.size).group("border");
-    this.addPropertyNumber(true, "border/radius", 0, 1e3, 0, 1, this.properties.general.border.radius).group("border");
-    this.addPropertyColor(true, "border/color", this.properties.general.border.color).group("border");
+    this.addPropertyXY(GENERAL_PROPERTY, AssetPropertyId.POSITION, this.properties.general.position.x, this.properties.general.position.y);
+    this.addPropertySize(GENERAL_PROPERTY, AssetPropertyId.SIZE, { w: this.properties.general.size.w, h: this.properties.general.size.h });
+    this.addPropertyColor(GENERAL_PROPERTY, "backgroundColor", this.properties.general.backgroundColor);
+    this.addPropertyNumber(GENERAL_PROPERTY, "border/size", 0, 1e3, 0, 1, this.properties.general.border.size).group("border");
+    this.addPropertyNumber(GENERAL_PROPERTY, "border/radius", 0, 1e3, 0, 1, this.properties.general.border.radius).group("border");
+    this.addPropertyColor(GENERAL_PROPERTY, "border/color", this.properties.general.border.color).group("border");
     this.addLiteralProperties("title");
     this.addLiteralProperties("subtitle");
     this.addLiteralProperties("footer");
-    this.addPropertyFont(true, `entityFonts/title`, { ...this.properties.general.entityFonts.title }).group("entityFonts");
-    this.addPropertyFont(true, `entityFonts/subtitle`, { ...this.properties.general.entityFonts.subtitle }).group("entityFonts");
-    this.addPropertyString(false, "title", "");
-    this.addPropertyString(false, "subtitle", "");
-    this.addPropertyNumber(false, "progress", 0, 100, 2, 0.01, 0);
-    this.addPropertyColor(false, "color", 0);
+    this.addPropertyFont(GENERAL_PROPERTY, "entityFonts/title", { ...this.properties.general.entityFonts.title }).group("entityFonts");
+    this.addPropertyFont(GENERAL_PROPERTY, "entityFonts/subtitle", { ...this.properties.general.entityFonts.subtitle }).group("entityFonts");
+    this.addPropertyString(ENTITY_PROPERTY, "title", "");
+    this.addPropertyString(ENTITY_PROPERTY, "subtitle", "1234567890");
+    this.addPropertyNumber(ENTITY_PROPERTY, "progress", 0, 100, 2, 0.01, 25);
+    this.addPropertyColor(ENTITY_PROPERTY, "color", 255);
     (_a = Helper.getGlobal()) == null ? void 0 : _a.loadFont(this.properties.general.title.font.family);
     (_b = Helper.getGlobal()) == null ? void 0 : _b.loadFont(this.properties.general.subtitle.font.family);
     (_c = Helper.getGlobal()) == null ? void 0 : _c.loadFont(this.properties.general.footer.font.family);
@@ -1090,7 +1092,7 @@ class BasicTitles extends DigoAssetHTML {
         style: {
           textAlign: literal.align === "justify" ? literal.align : void 0,
           justifySelf: literal.align === "justify" ? void 0 : literal.align,
-          padding: "0px " + this.getPercentagePixelsWidth(5),
+          padding: `0px ${this.getPercentagePixelsWidth(5)}`,
           ...this.getFontStyles(literal.font, this.getFontWidthReference())
         }
       },
@@ -1193,35 +1195,44 @@ class BasicTitles extends DigoAssetHTML {
     const totalEntities = this.getEntities().length;
     const width = `${this.properties.viewerWidth * (this.properties.general.size.w / 100)}px`;
     const height = `${this.properties.viewerHeight * (this.properties.general.size.h / 100)}px`;
-    return /* @__PURE__ */ y("div", { style: {
-      position: "relative",
-      backgroundColor: this.getCSSColor(this.properties.general.backgroundColor),
-      width,
-      height,
-      left: this.properties.viewerWidth * (this.properties.general.position.x / 100),
-      top: this.properties.viewerHeight * (this.properties.general.position.y / 100),
-      display: "grid",
-      gridTemplateColumns: "1fr",
-      gridTemplateRows: "auto auto 1fr auto",
-      gap: this.getPercentagePixelsWidth(5),
-      border: `${this.properties.general.border.size}px solid ${this.getCSSColor(this.properties.general.border.color)}`,
-      borderRadius: `${this.properties.general.border.radius}px`
-    } }, this.renderLiteral(this.properties.general.title), this.renderLiteral(this.properties.general.subtitle), /* @__PURE__ */ y(
+    return /* @__PURE__ */ y(
       "div",
       {
         style: {
+          position: "relative",
+          backgroundColor: this.getCSSColor(this.properties.general.backgroundColor),
+          width,
+          height,
+          left: this.properties.viewerWidth * (this.properties.general.position.x / 100),
+          top: this.properties.viewerHeight * (this.properties.general.position.y / 100),
           display: "grid",
           gridTemplateColumns: "1fr",
-          gridTemplateRows: `repeat(${totalEntities}, ${100 / totalEntities}%)`,
+          gridTemplateRows: "auto auto 1fr auto",
           gap: this.getPercentagePixelsWidth(5),
-          padding: `${this.getPercentagePixelsWidth(1)} ${this.getPercentagePixelsWidth(5)}`
+          border: `${this.properties.general.border.size}px solid ${this.getCSSColor(this.properties.general.border.color)}`,
+          borderRadius: `${this.properties.general.border.radius}px`
         }
       },
-      this.getEntities().map((entity) => {
-        var _a;
-        return this.renderEntity(entity, (_a = this.getEntity(entity)) == null ? void 0 : _a.component);
-      })
-    ), this.renderLiteral(this.properties.general.footer));
+      this.renderLiteral(this.properties.general.title),
+      this.renderLiteral(this.properties.general.subtitle),
+      /* @__PURE__ */ y(
+        "div",
+        {
+          style: {
+            display: "grid",
+            gridTemplateColumns: "1fr",
+            gridTemplateRows: `repeat(${totalEntities}, ${100 / totalEntities}%)`,
+            gap: this.getPercentagePixelsWidth(5),
+            padding: `${this.getPercentagePixelsWidth(1)} ${this.getPercentagePixelsWidth(5)}`
+          }
+        },
+        this.getEntities().map((entity) => {
+          var _a;
+          return this.renderEntity(entity, (_a = this.getEntity(entity)) == null ? void 0 : _a.component);
+        })
+      ),
+      this.renderLiteral(this.properties.general.footer)
+    );
   }
 }
 const digoAssetData = {

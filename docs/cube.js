@@ -90,7 +90,6 @@ class Helper {
     }
   }
 }
-const GENERAL_PROPERTY = true;
 const ENTITY_PROPERTY = false;
 var AssetPropertyId = /* @__PURE__ */ ((AssetPropertyId2) => {
   AssetPropertyId2["POSITION"] = "position";
@@ -570,7 +569,13 @@ class DigoAssetThree extends Asset {
     if (property && property.setter) {
       const data = entity ? this.getEntity(entity) : this.getGeneralData();
       if (data) {
-        property.setter(data, value, nextUpdate);
+        if (splittedProperties.length === 2 && property.getter) {
+          const objectValue = property.getter(data);
+          objectValue[splittedProperties[1]] = value;
+          property.setter(data, objectValue, nextUpdate);
+        } else {
+          property.setter(data, value, nextUpdate);
+        }
         setterCalled = true;
       }
     }
@@ -593,37 +598,23 @@ class DigoAssetThree extends Asset {
   }
 }
 const labels = {
-  colorTest: {
-    en: "Color test",
-    es: "Color de pruebas"
+  yourPropertyId: {
+    en: "English",
+    es: "Spanish"
   }
 };
 class GeneralData extends AssetGeneralData {
-  constructor() {
-    super(...arguments);
-    this.numberGlobal = 1;
-  }
 }
 class EntityData extends AssetEntityData {
-  constructor() {
-    super(...arguments);
-    this.numberEntity = 2;
-  }
 }
 class Cube extends DigoAssetThree {
   constructor(entities) {
     super();
     this.setLabels(labels);
     this.addDefaultProperties(true, true);
-    this.addPropertyNumber(GENERAL_PROPERTY, "numberGlobal", 0, 100, 0, 1, 1).setter((data, value) => {
-      data.numberGlobal = value;
-    }).getter((data) => data.numberGlobal);
     this.addPropertyColor(ENTITY_PROPERTY, "color", -1).setter((data, value) => {
       this.updatePropertyColor(data.component, value);
     }).getter((data) => this.getPropertyColor(data.component));
-    this.addPropertyNumber(ENTITY_PROPERTY, "numberEntity", 0, 100, 0, 1, 2).setter((data, value) => {
-      data.numberEntity = value;
-    }).getter((data) => data.numberEntity);
     const globalData = new GeneralData();
     globalData.container = new Scene();
     this.setGlobalData(globalData);
