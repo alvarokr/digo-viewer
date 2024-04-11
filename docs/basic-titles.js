@@ -46,9 +46,16 @@ class Helper {
   static createGlobal() {
     if (!Helper.getGlobal()) {
       window.digoAPI = {
-        asset: {},
+        asset: {
+          onLoad: (assetsFactory) => {
+          }
+        },
         loadFont: (fontName) => {
         },
+        loadResourceAsBase64: async (id) => "",
+        loadGLTF: (id, onLoad) => {
+        },
+        getResourceURL: (id) => "",
         forceRefresh: () => {
         },
         getAudioSampleRate: () => 48e3,
@@ -58,7 +65,9 @@ class Helper {
         getMIDINoteVelocity: (input, key) => 0,
         getMIDIControlVelocity: (input, key) => 0,
         getMIDINotesVelocity: (input) => [],
-        getMIDIControlsVelocity: (input) => []
+        getMIDIControlsVelocity: (input) => [],
+        getThreeWebGLRenderer: () => {
+        }
       };
     }
   }
@@ -268,6 +277,15 @@ class Asset {
     };
     return this.addProperty(general, property);
   }
+  addPropertyObject3D(general, id, defaultValue) {
+    const property = {
+      id,
+      type: "object3d",
+      defaultValue,
+      general
+    };
+    return this.addProperty(general, property);
+  }
   addPropertyFont(general, id, defaultValue) {
     const property = {
       id,
@@ -354,7 +372,7 @@ class Asset {
   getGeneralData() {
     return this.generalData;
   }
-  setGlobalData(data) {
+  setGeneralData(data) {
     this.generalData = data;
   }
   setViewerSize(width, height) {
@@ -841,7 +859,7 @@ class DigoAssetHTML extends Asset {
     if (value) {
       this.images.set(propertyId, value);
     } else if (id) {
-      (_a = Helper.getGlobal()) == null ? void 0 : _a.loadImage(id).then((imageData) => {
+      (_a = Helper.getGlobal()) == null ? void 0 : _a.loadResourceAsBase64(id).then((imageData) => {
         this.images.set(propertyId, imageData);
         this.forceRender();
       });
@@ -858,6 +876,7 @@ class DigoAssetHTML extends Asset {
   }
   updateProperty(entity, property, value, nextUpdate = 0) {
     var _a, _b, _c, _d, _e;
+    console.log({ entity, property, value });
     if (property === AssetPropertyId.LAYOUT_POSITION) {
       this.layoutPosition = value;
       (_a = Helper.getGlobal()) == null ? void 0 : _a.forceRefresh();

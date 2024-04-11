@@ -1,4 +1,4 @@
-import { G as GLTFLoader, S as Scene, B as BoxGeometry, M as MeshStandardMaterial, a as Mesh } from "./three.js";
+import { S as Scene, M as MeshPhysicalMaterial, B as BoxGeometry, a as Mesh } from "./three.js";
 (function polyfill() {
   const relList = document.createElement("link").relList;
   if (relList && relList.supports && relList.supports("modulepreload")) {
@@ -47,10 +47,14 @@ class Helper {
   static createGlobal() {
     if (!Helper.getGlobal()) {
       window.digoAPI = {
-        asset: {},
+        asset: {
+          onLoad: (assetsFactory) => {
+          }
+        },
         loadFont: (fontName) => {
         },
-        loadResourceAsBase64: (id) => {
+        loadResourceAsBase64: async (id) => "",
+        loadGLTF: (id, onLoad) => {
         },
         getResourceURL: (id) => "",
         forceRefresh: () => {
@@ -62,7 +66,11 @@ class Helper {
         getMIDINoteVelocity: (input, key) => 0,
         getMIDIControlVelocity: (input, key) => 0,
         getMIDINotesVelocity: (input) => [],
-        getMIDIControlsVelocity: (input) => []
+        getMIDIControlsVelocity: (input) => [],
+        getThreeWebGLRenderer: () => {
+        },
+        updateMaterial: (mesh, property, value, previousValue) => {
+        }
       };
     }
   }
@@ -281,6 +289,15 @@ class Asset {
     const property = {
       id,
       type: "font",
+      defaultValue,
+      general
+    };
+    return this.addProperty(general, property);
+  }
+  addPropertyMaterial(general, id, defaultValue) {
+    const property = {
+      id,
+      type: "material",
       defaultValue,
       general
     };
@@ -582,11 +599,11 @@ class DigoAssetThree extends Asset {
       const data = entity ? this.getEntity(entity) : this.getGeneralData();
       if (data) {
         if (splittedProperties.length === 2 && property.getter) {
-          const objectValue = property.getter(data);
+          const objectValue = JSON.parse(JSON.stringify(property.getter(data)));
           objectValue[splittedProperties[1]] = value;
-          property.setter(data, objectValue, nextUpdate);
+          property.setter(data, objectValue, propertyId, nextUpdate);
         } else {
-          property.setter(data, value, nextUpdate);
+          property.setter(data, value, propertyId, nextUpdate);
         }
         setterCalled = true;
       }
@@ -608,12 +625,12 @@ class DigoAssetThree extends Asset {
   }
   loadGLTF(id, onLoad) {
     var _a;
-    if (id) {
-      const url = (_a = Helper.getGlobal()) == null ? void 0 : _a.getResourceURL(id);
-      console.log({ url });
-      const loader = new GLTFLoader();
-      loader.load(url, onLoad);
-    }
+    (_a = Helper.getGlobal()) == null ? void 0 : _a.loadGLTF(id, onLoad);
+  }
+  updateMaterial(mesh, object, field, property, value) {
+    var _a;
+    (_a = Helper.getGlobal()) == null ? void 0 : _a.updateMaterial(mesh, property, value, object[field]);
+    object[field] = value;
   }
   tick(parameters) {
   }
@@ -627,15 +644,19 @@ const labels = {
 class GeneralData extends AssetGeneralData {
 }
 class EntityData extends AssetEntityData {
+  constructor() {
+    super(...arguments);
+    this.material = {};
+  }
 }
 class Cube extends DigoAssetThree {
   constructor(entities) {
     super();
     this.setLabels(labels);
     this.addDefaultProperties(true, true);
-    this.addPropertyColor(ENTITY_PROPERTY, "color", -1).setter((data, value) => {
-      this.updatePropertyColor(data.component, value);
-    }).getter((data) => this.getPropertyColor(data.component));
+    this.addPropertyMaterial(ENTITY_PROPERTY, "material", {}).setter((data, value, property) => {
+      this.updateMaterial(data.component, data, "material", property, value);
+    }).getter((data) => data.material);
     const generalData = new GeneralData();
     generalData.container = new Scene();
     this.setGeneralData(generalData);
@@ -643,12 +664,17 @@ class Cube extends DigoAssetThree {
       this.createEntity(entity);
     });
   }
+  createMaterial(data) {
+    data.material.type = "physical";
+    data.material.color = Math.floor(Math.random() * 16777215);
+    return new MeshPhysicalMaterial({ name: `${Math.random()}`, color: data.material.color });
+  }
   createEntity(id) {
-    const geometry = new BoxGeometry(0.8, 0.8, 0.8);
-    const material = new MeshStandardMaterial({ name: `${Math.random()}`, color: Math.floor(Math.random() * 16777215) });
-    const mesh = new Mesh(geometry, material);
-    mesh.position.x = 0;
     const entityData = new EntityData();
+    this.createMaterial(entityData);
+    const geometry = new BoxGeometry(0.8, 0.8, 0.8);
+    const mesh = new Mesh(geometry, this.createMaterial(entityData));
+    mesh.position.x = 0;
     entityData.component = mesh;
     this.addEntity(id, entityData);
     this.getContainer().add(mesh);
