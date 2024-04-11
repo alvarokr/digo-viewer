@@ -665,7 +665,7 @@ class Cube extends DigoAssetThree {
     });
   }
   createMaterial(data) {
-    data.material.type = "physical";
+    data.material.digoType = "physical";
     data.material.color = Math.floor(Math.random() * 16777215);
     return new MeshPhysicalMaterial({ name: `${Math.random()}`, color: data.material.color });
   }
