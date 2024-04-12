@@ -1,4 +1,4 @@
-import { S as Scene, M as MeshPhysicalMaterial, B as BoxGeometry, a as Mesh } from "./three.js";
+import { S as Scene } from "./three.js";
 (function polyfill() {
   const relList = document.createElement("link").relList;
   if (relList && relList.supports && relList.supports("modulepreload")) {
@@ -103,7 +103,7 @@ class Helper {
     }
   }
 }
-const ENTITY_PROPERTY = false;
+const GENERAL_PROPERTY = true;
 var AssetPropertyId = /* @__PURE__ */ ((AssetPropertyId2) => {
   AssetPropertyId2["POSITION"] = "position";
   AssetPropertyId2["SCALE"] = "scale";
@@ -115,8 +115,6 @@ var AssetPropertyId = /* @__PURE__ */ ((AssetPropertyId2) => {
   return AssetPropertyId2;
 })(AssetPropertyId || {});
 class AssetGeneralData {
-}
-class AssetEntityData {
 }
 class AssetPropertyClass {
   constructor(definition) {
@@ -632,14 +630,7 @@ class DigoAssetThree extends Asset {
   updateMaterial(mesh, object, field, property, value) {
     var _a;
     (_a = Helper.getGlobal()) == null ? void 0 : _a.updateMaterial(mesh, property, value, object[field]);
-    const [_, subProperty] = property.split("/");
-    if (subProperty) {
-      object[field][subProperty] = value[subProperty];
-    } else {
-      Object.keys(value).forEach((key) => {
-        object[field][key] = value[key];
-      });
-    }
+    object[field] = value;
   }
   setEnvironmentMap(id, alsoBackground) {
     var _a;
@@ -649,58 +640,50 @@ class DigoAssetThree extends Asset {
   }
 }
 const labels = {
-  yourPropertyId: {
-    en: "English",
-    es: "Spanish"
+  imageMap: {
+    en: "Image map",
+    es: "Mapa de imagen"
+  },
+  alsoBackground: {
+    en: "Use also as background",
+    es: "Usar también de fondo"
   }
 };
 class GeneralData extends AssetGeneralData {
-}
-class EntityData extends AssetEntityData {
   constructor() {
     super(...arguments);
-    this.material = {};
+    this.imageId = "";
+    this.alsoBackground = true;
   }
 }
-class Cube extends DigoAssetThree {
+class Environment extends DigoAssetThree {
   constructor(entities) {
     super();
     this.setLabels(labels);
-    this.addDefaultProperties(true, true);
-    this.addPropertyMaterial(ENTITY_PROPERTY, "material", {}).setter((data, value, property) => {
-      this.updateMaterial(data.component, data, "material", property, value);
-    }).getter((data) => data.material);
+    this.addPropertyImage(GENERAL_PROPERTY, "imageMap", "").setter((data, value) => {
+      this.updateImage(data, value, data.alsoBackground);
+    }).getter((data) => data.imageId);
+    this.addPropertyBoolean(GENERAL_PROPERTY, "alsoBackground", true).setter((data, value) => {
+      this.updateImage(data, data.imageId, value);
+    }).getter((data) => data.alsoBackground);
     const generalData = new GeneralData();
     generalData.container = new Scene();
     this.setGeneralData(generalData);
-    entities.forEach((entity) => {
-      this.createEntity(entity);
-    });
   }
-  createMaterial(data) {
-    data.material.digoType = "physical";
-    data.material.color = Math.floor(Math.random() * 16777215);
-    return new MeshPhysicalMaterial({ name: `${Math.random()}`, color: data.material.color });
-  }
-  createEntity(id) {
-    const entityData = new EntityData();
-    this.createMaterial(entityData);
-    const geometry = new BoxGeometry(0.8, 0.8, 0.8);
-    const mesh = new Mesh(geometry, this.createMaterial(entityData));
-    mesh.position.x = 0;
-    entityData.component = mesh;
-    this.addEntity(id, entityData);
-    this.getContainer().add(mesh);
+  updateImage(data, id, alsoBackground) {
+    data.imageId = id;
+    data.alsoBackground = alsoBackground;
+    this.setEnvironmentMap(id, alsoBackground);
   }
 }
 const digoAssetData = {
   info: {
     name: {
-      en: "Cube",
-      es: "Cubo"
+      en: "Environment",
+      es: "Entorno"
     },
     category: "objects",
-    icon: "ViewInAr",
+    icon: "Wallpaper",
     vendor: "Digo",
     license: "MIT",
     version: "1.0",
@@ -710,8 +693,8 @@ const digoAssetData = {
     }
   },
   create: (entities) => {
-    return new Cube(entities || []);
+    return new Environment(entities || []);
   }
 };
-console.log("Cube asset loaded");
+console.log("Environment asset loaded");
 Helper.loadAsset(digoAssetData);
