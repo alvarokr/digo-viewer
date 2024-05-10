@@ -1,4 +1,4 @@
-import { S as Scene } from "./three.js";
+import { B as BufferGeometry, a as BufferAttribute, S as Scene, M as Mesh, V as Vector3, b as Matrix4, C as Color, U as Uniform, I as InstancedMesh, c as MeshPhysicalMaterial, O as Object3D, d as InstancedBufferAttribute } from "./three.js";
 (function polyfill() {
   const relList = document.createElement("link").relList;
   if (relList && relList.supports && relList.supports("modulepreload")) {
@@ -69,6 +69,8 @@ class Helper {
         getMIDIControlsVelocity: (input) => [],
         getThreeWebGLRenderer: () => {
         },
+        getThreeCamera: () => {
+        },
         updateMaterial: (mesh, property, value, previousValue) => {
         },
         setEnvironmentMap: (resourceId, alsoBackground) => {
@@ -103,7 +105,7 @@ class Helper {
     }
   }
 }
-const GENERAL_PROPERTY = true;
+const ENTITY_PROPERTY = false;
 var AssetPropertyId = /* @__PURE__ */ ((AssetPropertyId2) => {
   AssetPropertyId2["POSITION"] = "position";
   AssetPropertyId2["SCALE"] = "scale";
@@ -115,6 +117,8 @@ var AssetPropertyId = /* @__PURE__ */ ((AssetPropertyId2) => {
   return AssetPropertyId2;
 })(AssetPropertyId || {});
 class AssetGeneralData {
+}
+class AssetEntityData {
 }
 class AssetPropertyClass {
   constructor(definition) {
@@ -387,8 +391,8 @@ class Asset {
     this.viewerWidth = width;
     this.viewerHeight = height;
   }
-  setLabels(labels) {
-    this.labels = labels;
+  setLabels(labels2) {
+    this.labels = labels2;
   }
   getLabel(id, language) {
     if (this.labels[id] && this.labels[id][language]) {
@@ -512,6 +516,161 @@ class Asset {
   }
   tick(parameters) {
   }
+}
+function mergeGeometries(geometries, useGroups = false) {
+  const isIndexed = geometries[0].index !== null;
+  const attributesUsed = new Set(Object.keys(geometries[0].attributes));
+  const morphAttributesUsed = new Set(Object.keys(geometries[0].morphAttributes));
+  const attributes = {};
+  const morphAttributes = {};
+  const morphTargetsRelative = geometries[0].morphTargetsRelative;
+  const mergedGeometry = new BufferGeometry();
+  let offset = 0;
+  for (let i = 0; i < geometries.length; ++i) {
+    const geometry = geometries[i];
+    let attributesCount = 0;
+    if (isIndexed !== (geometry.index !== null)) {
+      console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index " + i + ". All geometries must have compatible attributes; make sure index attribute exists among all geometries, or in none of them.");
+      return null;
+    }
+    for (const name in geometry.attributes) {
+      if (!attributesUsed.has(name)) {
+        console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index " + i + '. All geometries must have compatible attributes; make sure "' + name + '" attribute exists among all geometries, or in none of them.');
+        return null;
+      }
+      if (attributes[name] === void 0)
+        attributes[name] = [];
+      attributes[name].push(geometry.attributes[name]);
+      attributesCount++;
+    }
+    if (attributesCount !== attributesUsed.size) {
+      console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index " + i + ". Make sure all geometries have the same number of attributes.");
+      return null;
+    }
+    if (morphTargetsRelative !== geometry.morphTargetsRelative) {
+      console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index " + i + ". .morphTargetsRelative must be consistent throughout all geometries.");
+      return null;
+    }
+    for (const name in geometry.morphAttributes) {
+      if (!morphAttributesUsed.has(name)) {
+        console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index " + i + ".  .morphAttributes must be consistent throughout all geometries.");
+        return null;
+      }
+      if (morphAttributes[name] === void 0)
+        morphAttributes[name] = [];
+      morphAttributes[name].push(geometry.morphAttributes[name]);
+    }
+    if (useGroups) {
+      let count;
+      if (isIndexed) {
+        count = geometry.index.count;
+      } else if (geometry.attributes.position !== void 0) {
+        count = geometry.attributes.position.count;
+      } else {
+        console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index " + i + ". The geometry must have either an index or a position attribute");
+        return null;
+      }
+      mergedGeometry.addGroup(offset, count, i);
+      offset += count;
+    }
+  }
+  if (isIndexed) {
+    let indexOffset = 0;
+    const mergedIndex = [];
+    for (let i = 0; i < geometries.length; ++i) {
+      const index = geometries[i].index;
+      for (let j = 0; j < index.count; ++j) {
+        mergedIndex.push(index.getX(j) + indexOffset);
+      }
+      indexOffset += geometries[i].attributes.position.count;
+    }
+    mergedGeometry.setIndex(mergedIndex);
+  }
+  for (const name in attributes) {
+    const mergedAttribute = mergeAttributes(attributes[name]);
+    if (!mergedAttribute) {
+      console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed while trying to merge the " + name + " attribute.");
+      return null;
+    }
+    mergedGeometry.setAttribute(name, mergedAttribute);
+  }
+  for (const name in morphAttributes) {
+    const numMorphTargets = morphAttributes[name][0].length;
+    if (numMorphTargets === 0)
+      break;
+    mergedGeometry.morphAttributes = mergedGeometry.morphAttributes || {};
+    mergedGeometry.morphAttributes[name] = [];
+    for (let i = 0; i < numMorphTargets; ++i) {
+      const morphAttributesToMerge = [];
+      for (let j = 0; j < morphAttributes[name].length; ++j) {
+        morphAttributesToMerge.push(morphAttributes[name][j][i]);
+      }
+      const mergedMorphAttribute = mergeAttributes(morphAttributesToMerge);
+      if (!mergedMorphAttribute) {
+        console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed while trying to merge the " + name + " morphAttribute.");
+        return null;
+      }
+      mergedGeometry.morphAttributes[name].push(mergedMorphAttribute);
+    }
+  }
+  return mergedGeometry;
+}
+function mergeAttributes(attributes) {
+  let TypedArray;
+  let itemSize;
+  let normalized;
+  let gpuType = -1;
+  let arrayLength = 0;
+  for (let i = 0; i < attributes.length; ++i) {
+    const attribute = attributes[i];
+    if (TypedArray === void 0)
+      TypedArray = attribute.array.constructor;
+    if (TypedArray !== attribute.array.constructor) {
+      console.error("THREE.BufferGeometryUtils: .mergeAttributes() failed. BufferAttribute.array must be of consistent array types across matching attributes.");
+      return null;
+    }
+    if (itemSize === void 0)
+      itemSize = attribute.itemSize;
+    if (itemSize !== attribute.itemSize) {
+      console.error("THREE.BufferGeometryUtils: .mergeAttributes() failed. BufferAttribute.itemSize must be consistent across matching attributes.");
+      return null;
+    }
+    if (normalized === void 0)
+      normalized = attribute.normalized;
+    if (normalized !== attribute.normalized) {
+      console.error("THREE.BufferGeometryUtils: .mergeAttributes() failed. BufferAttribute.normalized must be consistent across matching attributes.");
+      return null;
+    }
+    if (gpuType === -1)
+      gpuType = attribute.gpuType;
+    if (gpuType !== attribute.gpuType) {
+      console.error("THREE.BufferGeometryUtils: .mergeAttributes() failed. BufferAttribute.gpuType must be consistent across matching attributes.");
+      return null;
+    }
+    arrayLength += attribute.count * itemSize;
+  }
+  const array = new TypedArray(arrayLength);
+  const result = new BufferAttribute(array, itemSize, normalized);
+  let offset = 0;
+  for (let i = 0; i < attributes.length; ++i) {
+    const attribute = attributes[i];
+    if (attribute.isInterleavedBufferAttribute) {
+      const tupleOffset = offset / itemSize;
+      for (let j = 0, l = attribute.count; j < l; j++) {
+        for (let c = 0; c < itemSize; c++) {
+          const value = attribute.getComponent(j, c);
+          result.setComponent(j + tupleOffset, c, value);
+        }
+      }
+    } else {
+      array.set(attribute.array, offset);
+    }
+    offset += attribute.count * itemSize;
+  }
+  if (gpuType !== void 0) {
+    result.gpuType = gpuType;
+  }
+  return result;
 }
 class DigoAssetThree extends Asset {
   getContainer() {
@@ -646,44 +805,276 @@ class DigoAssetThree extends Asset {
   tick(parameters) {
   }
 }
-class GeneralData extends AssetGeneralData {
-  constructor() {
-    super(...arguments);
-    this.objectId = "";
+const labels = {
+  bounciness: {
+    en: "Bounciness",
+    es: "Rebote"
+  },
+  gravity: {
+    en: "Gravity",
+    es: "Gravedad"
+  },
+  material: {
+    en: "Material",
+    es: "Material"
+  },
+  mesh: {
+    en: "Mesh",
+    es: "Objeto"
+  },
+  physics: {
+    en: "Physics",
+    es: "Físicas"
+  },
+  size: {
+    en: "Size",
+    es: "Tamaño"
+  },
+  thrower: {
+    en: "Thrower",
+    es: "Disparador"
   }
+};
+const glslFunctions = `
+// Linear
+float linear(float t) {
+    return t;
 }
-class ImportedAsset extends DigoAssetThree {
+
+// Ease In Quad
+float easeInQuad(float t) {
+    return t * t;
+}
+
+// Ease Out Quad
+float easeOutQuad(float t) {
+    return -1.0 * t * (t - 2.0);
+}
+
+// Ease In Out Quad
+float easeInOutQuad(float t) {
+    t *= 2.0;
+    if (t < 1.0) return 0.5 * t * t;
+    t--;
+    return -0.5 * (t * (t - 2.0) - 1.0);
+}
+
+// Ease In Cubic
+float easeInCubic(float t) {
+    return t * t * t;
+}
+
+// Ease Out Cubic
+float easeOutCubic(float t) {
+    t--;
+    return t * t * t + 1.0;
+}
+
+// Ease In Out Cubic
+float easeInOutCubic(float t) {
+    t *= 2.0;
+    if (t < 1.0) return 0.5 * t * t * t;
+    t -= 2.0;
+    return 0.5 * (t * t * t + 2.0);
+}
+
+// Ease In Quart
+float easeInQuart(float t) {
+    return t * t * t * t;
+}
+
+// Ease Out Quart
+float easeOutQuart(float t) {
+    t--;
+    return -1.0 * (t * t * t * t - 1.0);
+}
+
+// Ease In Out Quart
+float easeInOutQuart(float t) {
+    t *= 2.0;
+    if (t < 1.0) return 0.5 * t * t * t * t;
+    t -= 2.0;
+    return -0.5 * (t * t * t * t - 2.0);
+}
+
+// Ease In Quint
+float easeInQuint(float t) {
+    return t * t * t * t * t;
+}
+
+// Ease Out Quint
+float easeOutQuint(float t) {
+    t--;
+    return t * t * t * t * t + 1.0;
+}
+
+// Ease In Out Quint
+float easeInOutQuint(float t) {
+    t *= 2.0;
+    if (t < 1.0) return 0.5 * t * t * t * t * t;
+    t -= 2.0;
+    return 0.5 * (t * t * t * t * t + 2.0);
+}
+`;
+const OPTIONS_KEYS = ["first", "second"];
+const OPTIONS_ICONS = ["FormatAlignLeft", "FormatAlignCenter"];
+const DEFAULTS = {
+  size: 1,
+  uniform: 0,
+  color: 16711680,
+  material: { digoType: "physical", color: 16777215 },
+  objectId: "",
+  optionSelectedIndex: 0
+};
+class GeneralData extends AssetGeneralData {
+}
+class EntityData extends AssetEntityData {
   constructor() {
     super();
-    this.addDefaultProperties(true, false);
-    this.addPropertyObject3D(GENERAL_PROPERTY, "3D Object", "").setter((data, value) => {
-      this.setObject(data, value);
-    }).getter((data) => data.objectId);
+    this.properties = {
+      size: DEFAULTS.size,
+      time: new Uniform(0),
+      uniform: new Uniform(DEFAULTS.uniform),
+      colorUniform: new Uniform(new Color(DEFAULTS.color)),
+      material: { digoType: "physical", color: 16777215 },
+      objectId: DEFAULTS.objectId,
+      optionSelectedIndex: DEFAULTS.optionSelectedIndex
+    };
+    this.instances = new InstancedMesh(new BufferGeometry(), new MeshPhysicalMaterial({ name: `${Math.random()}` }), 100);
+    this.updateInstancers();
+    this.setupMaterial();
+    this.setupInstances();
+  }
+  updateInstancers() {
+    const instancesCount = 100;
+    const dummy = new Object3D();
+    const instanceUV = new Float32Array(instancesCount * 3);
+    for (let i = 0; i < instancesCount; i++) {
+      instanceUV.set([i, 0, 0], i * 3);
+      dummy.position.set(0, 0, 0);
+    }
+    this.instances.geometry.setAttribute("instanceData", new InstancedBufferAttribute(instanceUV, 3));
+  }
+  setupInstances() {
+    this.instances.receiveShadow = true;
+    this.instances.castShadow = true;
+    this.instances.computeBoundingSphere();
+  }
+  setupMaterial() {
+    const uniforms = {
+      uUniform: this.properties.uniform,
+      uColor: this.properties.colorUniform
+    };
+    this.instances.material.onBeforeCompile = (shader) => {
+      shader.uniforms = Object.assign(shader.uniforms, uniforms);
+      shader.vertexShader = glslFunctions + shader.vertexShader.replace(
+        "#include <common>",
+        `
+        uniform float uUniform;
+        uniform vec3 uColor;
+        attribute vec3 instanceData;
+        varying float vVarying;
+
+        `
+      );
+      shader.vertexShader = shader.vertexShader.replace(
+        "#include <begin_vertex>",
+        `
+        #include <begin_vertex>
+
+
+        `
+      );
+      shader.fragmentShader = shader.fragmentShader.replace(
+        "#include <common>",
+        `
+        #include <common>
+        varying float vVarying;
+        
+        `
+      );
+      shader.fragmentShader = shader.fragmentShader.replace(
+        "#include <color_fragment>",
+        `#include <color_fragment>
+        
+
+        `
+      );
+    };
+  }
+}
+class Thrower extends DigoAssetThree {
+  constructor(entities) {
+    super();
+    this.webGLRenderer = Helper.getGlobal().getThreeWebGLRenderer();
+    this.setLabels(labels);
+    this.addDefaultProperties(true, true);
+    this.addProperties();
     const generalData = new GeneralData();
     generalData.container = new Scene();
     this.setGeneralData(generalData);
-  }
-  setObject(data, id) {
-    this.getContainer().remove(data.objectScene);
-    this.loadGLTF(id, (gltf) => {
-      data.objectScene = gltf.scene;
-      gltf.scene.scale.x = 0.01;
-      gltf.scene.scale.y = 0.01;
-      gltf.scene.scale.z = 0.01;
-      this.getContainer().add(gltf.scene);
-      console.log("gltf", gltf);
+    entities.forEach((entity) => {
+      this.createEntity(entity);
     });
-    data.objectId = id;
+  }
+  updateGeometry(data, id) {
+    this.loadGLTF(id, (gltf) => {
+      const geometries = [];
+      gltf.scene.traverse((node) => {
+        if (node instanceof Mesh) {
+          const mesh = node;
+          geometries.push(mesh.geometry);
+        }
+      });
+      const mergedGeometry = mergeGeometries(geometries);
+      mergedGeometry.computeBoundingBox();
+      const size = mergedGeometry.boundingBox.getSize(new Vector3());
+      const scaleFactor = 1 / Math.max(size.x, size.y, size.z);
+      const scaleMatrix = new Matrix4().makeScale(scaleFactor, scaleFactor, scaleFactor);
+      mergedGeometry.applyMatrix4(scaleMatrix);
+      mergedGeometry.scale(data.properties.size, data.properties.size, data.properties.size);
+      data.instances.geometry = mergedGeometry;
+    });
+    data.properties.objectId = id;
+  }
+  createEntity(id) {
+    const entityData = new EntityData();
+    const component = entityData.instances;
+    entityData.component = component;
+    this.addEntity(id, entityData);
+    this.getContainer().add(component);
+  }
+  addProperties() {
+    this.addPropertyObject3D(ENTITY_PROPERTY, "geometry").group("mesh").setter((data, value) => {
+      this.updateGeometry(data, value);
+    }).getter((data) => data.properties.objectId);
+    this.addPropertyMaterial(ENTITY_PROPERTY, "material", DEFAULTS.material).group("mesh").setter((data, value, property) => this.updateMaterial(data.instances, data.properties, "material", property, value)).getter((data) => data.properties.material);
+    this.addPropertyColor(ENTITY_PROPERTY, "color", DEFAULTS.color).group("other").setter((data, value) => {
+      data.properties.colorUniform.value = new Color(value >>> 8);
+    }).getter((data) => Number.parseInt(`${data.properties.colorUniform.value.getHex().toString(16)}ff`, 16));
+    this.addPropertyNumber(ENTITY_PROPERTY, "size", 0, 100, 2, 0.01, DEFAULTS.size).group("other").setter((data, value) => {
+      data.properties.size = value;
+    }).getter((data) => data.properties.size);
+    this.addPropertyOptions(ENTITY_PROPERTY, "options", OPTIONS_KEYS[DEFAULTS.optionSelectedIndex], OPTIONS_KEYS, OPTIONS_ICONS).group("other").setter((data, value) => {
+      data.properties.optionSelectedIndex = OPTIONS_KEYS.findIndex((element) => element === value);
+    }).getter((data) => OPTIONS_KEYS[data.properties.optionSelectedIndex]);
+  }
+  tick(parameters) {
+    this.getEntities().forEach((entityName) => {
+      const entityData = this.getEntity(entityName);
+      entityData.properties.time.value = parameters.elapsedTime;
+    });
+    super.tick(parameters);
   }
 }
 const digoAssetData = {
   info: {
     name: {
-      en: "Imported Asset",
-      es: "Asset Importado"
+      en: "Thrower",
+      es: "Disparador"
     },
     category: "objects",
-    icon: "ViewInAr",
+    icon: "AutoAwesome",
     vendor: "Digo",
     license: "MIT",
     version: "1.0",
@@ -692,9 +1083,8 @@ const digoAssetData = {
       version: "0.158.0"
     }
   },
-  create: () => {
-    return new ImportedAsset();
+  create: (entities) => {
+    return new Thrower(entities || []);
   }
 };
-console.log("Imported asset loaded");
 Helper.loadAsset(digoAssetData);

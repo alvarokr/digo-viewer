@@ -569,7 +569,13 @@ class DigoAssetThree extends Asset {
     if (property && property.setter) {
       const data = entity ? this.getEntity(entity) : this.getGeneralData();
       if (data) {
-        property.setter(data, value, nextUpdate);
+        if (splittedProperties.length === 2 && property.getter) {
+          const objectValue = property.getter(data);
+          objectValue[splittedProperties[1]] = value;
+          property.setter(data, objectValue, nextUpdate);
+        } else {
+          property.setter(data, value, nextUpdate);
+        }
         setterCalled = true;
       }
     }
@@ -591,11 +597,6 @@ class DigoAssetThree extends Asset {
   tick(parameters) {
   }
 }
-class AssetBase extends DigoAssetThree {
-  constructor() {
-    super();
-  }
-}
 const labels = {
   particles: {
     en: "Particles",
@@ -603,6 +604,7 @@ const labels = {
   }
 };
 const texture = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADgAAAA4CAMAAACfWMssAAAAmVBMVEUAAAAHBwcNDQ0QEBAwMDAbGxsYGBgJCQn////7+/sgICATExNQUFA6OjorKyujo6MoKCjZ2dnw8PDq6uri4uLf39/Ly8vCwsJtbW1nZ2fOzs6zs7OPj4+goKCLi4uHh4d8fHxUVFT19fW5ubm1tbWSkpJXV1dCQkI1NTUlJSX09PTb29t+fn5bW1taWlpOTk40NDTQ0NCTk5OjPdNLAAAByklEQVRIx+WWXXeCMAyGQ2nT2UIBEUFFFL91Tt3+/49bmWywHXeovfDGXBC+ntM2Sd8UntwcxxIkxBKU0hJEtASFsATD0BKk1BL0fbssgueBTSYJjEb6YmbtEVyYz/Wl+WRKcshz4B1cm2x8ELQfO0Hi1DOlkwnVrnnZRSKvHIKXpp522jgaRZeIahgG2XicaacHF4bBlQorcBZFswpEZbxLmC/04qaDwVQ74TMwtv2WglrF8UoB3e7hDrucVDns94elOl1Ma8dFxnQusEgOh6RAnRHG0HU6cujW8QvLIuppey3KsI6125VLes5m09Uw6b1o6yXD5XSWnek/MkgkipD63mieB5N0HA3i/uEKLvrxIBqnk2A9H3k+DQVK4vzUISeSXcHj+htctMD3dBV8HK8gk4Q7N4fflVkRLFtTDYqs3PGu4NQ/0E3++hWcfFMvj3cFh1fpIKBYniwWSc4UEMZQclOBe6ObqgA2+uYuKd7uQC3jeKlgtxXmHPr7psj3PppyrmLtbcWUa8ZxIX9vZCm4UZUj+SsdxEg6bouVef/mV3nkzVtzQV6v24Js3wIsmo5Nm7NsrI9u5WH46OMK4qOPZITYHzuf2z4B+jwb0H2jMOEAAAAASUVORK5CYII=";
+console.log("texture", texture);
 const TOTAL_PARTICLES = 1e5;
 class GeneralData extends AssetGeneralData {
 }
@@ -612,7 +614,7 @@ class EntityData extends AssetEntityData {
     this.numberOfParticles = TOTAL_PARTICLES;
   }
 }
-class Particles extends AssetBase {
+class Particles extends DigoAssetThree {
   constructor(entities) {
     super();
     this.particles = /* @__PURE__ */ new Map();
