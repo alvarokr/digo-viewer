@@ -1,4 +1,4 @@
-import { B as BufferGeometry, a as BufferAttribute, L as LineSegments, b as LineBasicMaterial, c as BoxGeometry, S as SphereGeometry, I as IcosahedronGeometry, V as Vector3, Q as Quaternion, E as Euler, d as Scene, M as Material, e as Mesh, f as Matrix4, g as InstancedMesh, h as MeshPhysicalMaterial, D as DynamicDrawUsage, i as MathUtils } from "./three.js";
+import { B as Box3, V as Vector3, A as AnimationMixer, M as Mesh, L as LineSegments, a as BufferGeometry, b as LineBasicMaterial, c as BufferAttribute, d as BoxGeometry, S as SphereGeometry, I as IcosahedronGeometry, Q as Quaternion, E as Euler, e as Scene, O as Object3D, f as MeshPhysicalMaterial, g as SkeletonHelper } from "./three.js";
 (function polyfill() {
   const relList = document.createElement("link").relList;
   if (relList && relList.supports && relList.supports("modulepreload")) {
@@ -658,160 +658,66 @@ class DigoAssetThree extends Asset {
   tick(parameters) {
   }
 }
-function mergeGeometries(geometries, useGroups = false) {
-  const isIndexed = geometries[0].index !== null;
-  const attributesUsed = new Set(Object.keys(geometries[0].attributes));
-  const morphAttributesUsed = new Set(Object.keys(geometries[0].morphAttributes));
-  const attributes = {};
-  const morphAttributes = {};
-  const morphTargetsRelative = geometries[0].morphTargetsRelative;
-  const mergedGeometry = new BufferGeometry();
-  let offset = 0;
-  for (let i2 = 0; i2 < geometries.length; ++i2) {
-    const geometry = geometries[i2];
-    let attributesCount = 0;
-    if (isIndexed !== (geometry.index !== null)) {
-      console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index " + i2 + ". All geometries must have compatible attributes; make sure index attribute exists among all geometries, or in none of them.");
-      return null;
-    }
-    for (const name in geometry.attributes) {
-      if (!attributesUsed.has(name)) {
-        console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index " + i2 + '. All geometries must have compatible attributes; make sure "' + name + '" attribute exists among all geometries, or in none of them.');
-        return null;
-      }
-      if (attributes[name] === void 0)
-        attributes[name] = [];
-      attributes[name].push(geometry.attributes[name]);
-      attributesCount++;
-    }
-    if (attributesCount !== attributesUsed.size) {
-      console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index " + i2 + ". Make sure all geometries have the same number of attributes.");
-      return null;
-    }
-    if (morphTargetsRelative !== geometry.morphTargetsRelative) {
-      console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index " + i2 + ". .morphTargetsRelative must be consistent throughout all geometries.");
-      return null;
-    }
-    for (const name in geometry.morphAttributes) {
-      if (!morphAttributesUsed.has(name)) {
-        console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index " + i2 + ".  .morphAttributes must be consistent throughout all geometries.");
-        return null;
-      }
-      if (morphAttributes[name] === void 0)
-        morphAttributes[name] = [];
-      morphAttributes[name].push(geometry.morphAttributes[name]);
-    }
-    if (useGroups) {
-      let count;
-      if (isIndexed) {
-        count = geometry.index.count;
-      } else if (geometry.attributes.position !== void 0) {
-        count = geometry.attributes.position.count;
-      } else {
-        console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index " + i2 + ". The geometry must have either an index or a position attribute");
-        return null;
-      }
-      mergedGeometry.addGroup(offset, count, i2);
-      offset += count;
-    }
+let RAPIER_UTILS$1;
+class ModelUtils {
+  constructor(rapierUtils) {
+    RAPIER_UTILS$1 = rapierUtils;
   }
-  if (isIndexed) {
-    let indexOffset = 0;
-    const mergedIndex = [];
-    for (let i2 = 0; i2 < geometries.length; ++i2) {
-      const index = geometries[i2].index;
-      for (let j2 = 0; j2 < index.count; ++j2) {
-        mergedIndex.push(index.getX(j2) + indexOffset);
-      }
-      indexOffset += geometries[i2].attributes.position.count;
-    }
-    mergedGeometry.setIndex(mergedIndex);
+  setModel(gltf) {
+    const scene = this.getScene(gltf);
+    const animationManager = this.getAnimations(gltf.animations, scene);
+    const slots = this.getSlots(scene);
+    const model = { scene, animationManager, slots };
+    return model;
   }
-  for (const name in attributes) {
-    const mergedAttribute = mergeAttributes(attributes[name]);
-    if (!mergedAttribute) {
-      console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed while trying to merge the " + name + " attribute.");
-      return null;
-    }
-    mergedGeometry.setAttribute(name, mergedAttribute);
+  getScene(gltf) {
+    const scene = gltf.scene;
+    const desiredSize = 1;
+    const box = new Box3().setFromObject(scene);
+    const size = box.getSize(new Vector3()).length();
+    const scaleFactor = desiredSize / size;
+    scene.scale.set(scaleFactor, scaleFactor, scaleFactor);
+    return scene;
   }
-  for (const name in morphAttributes) {
-    const numMorphTargets = morphAttributes[name][0].length;
-    if (numMorphTargets === 0)
-      break;
-    mergedGeometry.morphAttributes = mergedGeometry.morphAttributes || {};
-    mergedGeometry.morphAttributes[name] = [];
-    for (let i2 = 0; i2 < numMorphTargets; ++i2) {
-      const morphAttributesToMerge = [];
-      for (let j2 = 0; j2 < morphAttributes[name].length; ++j2) {
-        morphAttributesToMerge.push(morphAttributes[name][j2][i2]);
-      }
-      const mergedMorphAttribute = mergeAttributes(morphAttributesToMerge);
-      if (!mergedMorphAttribute) {
-        console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed while trying to merge the " + name + " morphAttribute.");
-        return null;
-      }
-      mergedGeometry.morphAttributes[name].push(mergedMorphAttribute);
-    }
+  getAnimations(animationClips, scene) {
+    const mixer = new AnimationMixer(scene);
+    const animations = [];
+    animationClips.forEach((clip) => {
+      const animation = {
+        clip,
+        action: mixer.clipAction(clip)
+      };
+      animations.push(animation);
+    });
+    return {
+      mixer,
+      animations
+    };
   }
-  return mergedGeometry;
-}
-function mergeAttributes(attributes) {
-  let TypedArray;
-  let itemSize;
-  let normalized;
-  let gpuType = -1;
-  let arrayLength = 0;
-  for (let i2 = 0; i2 < attributes.length; ++i2) {
-    const attribute = attributes[i2];
-    if (TypedArray === void 0)
-      TypedArray = attribute.array.constructor;
-    if (TypedArray !== attribute.array.constructor) {
-      console.error("THREE.BufferGeometryUtils: .mergeAttributes() failed. BufferAttribute.array must be of consistent array types across matching attributes.");
-      return null;
-    }
-    if (itemSize === void 0)
-      itemSize = attribute.itemSize;
-    if (itemSize !== attribute.itemSize) {
-      console.error("THREE.BufferGeometryUtils: .mergeAttributes() failed. BufferAttribute.itemSize must be consistent across matching attributes.");
-      return null;
-    }
-    if (normalized === void 0)
-      normalized = attribute.normalized;
-    if (normalized !== attribute.normalized) {
-      console.error("THREE.BufferGeometryUtils: .mergeAttributes() failed. BufferAttribute.normalized must be consistent across matching attributes.");
-      return null;
-    }
-    if (gpuType === -1)
-      gpuType = attribute.gpuType;
-    if (gpuType !== attribute.gpuType) {
-      console.error("THREE.BufferGeometryUtils: .mergeAttributes() failed. BufferAttribute.gpuType must be consistent across matching attributes.");
-      return null;
-    }
-    arrayLength += attribute.count * itemSize;
-  }
-  const array = new TypedArray(arrayLength);
-  const result = new BufferAttribute(array, itemSize, normalized);
-  let offset = 0;
-  for (let i2 = 0; i2 < attributes.length; ++i2) {
-    const attribute = attributes[i2];
-    if (attribute.isInterleavedBufferAttribute) {
-      const tupleOffset = offset / itemSize;
-      for (let j2 = 0, l2 = attribute.count; j2 < l2; j2++) {
-        for (let c2 = 0; c2 < itemSize; c2++) {
-          const value = attribute.getComponent(j2, c2);
-          result.setComponent(j2 + tupleOffset, c2, value);
+  getSlots(scene) {
+    const slots = [];
+    scene.traverse((node) => {
+      if (node instanceof Mesh) {
+        const morphTargets = [];
+        if (node.morphTargetDictionary) {
+          Object.entries(node.morphTargetDictionary).forEach(([name, index], i2) => {
+            const influence = node.morphTargetInfluences[index];
+            morphTargets.push({ name, index, influence });
+          });
         }
+        const meshPhysics = RAPIER_UTILS$1.addMeshPhysics(node, true);
+        const originalMaterial = node.material;
+        slots.push({ mesh: node, meshPhysics, originalMaterial, morphTargets });
       }
-    } else {
-      array.set(attribute.array, offset);
+    });
+    return slots;
+  }
+  updateSlotPhysicsScale(slot) {
+    if (slot.meshPhysics && slot.mesh) {
+      RAPIER_UTILS$1.removeMeshPhysics(slot.meshPhysics);
+      slot.meshPhysics = RAPIER_UTILS$1.addMeshPhysics(slot.mesh, true);
     }
-    offset += attribute.count * itemSize;
   }
-  if (gpuType !== void 0) {
-    result.gpuType = gpuType;
-  }
-  return result;
 }
 let A;
 const I = new Array(128).fill(void 0);
@@ -5930,29 +5836,49 @@ class RapierUtils {
   }
 }
 const labels = {
+  active: {
+    en: "Active",
+    es: "Activas"
+  },
+  animation: {
+    en: "Animation",
+    es: "Animación"
+  },
+  animations: {
+    en: "Animations",
+    es: "Animaciones"
+  },
+  animationsControl: {
+    en: "Control",
+    es: "Control"
+  },
+  animationsPercent: {
+    en: "Percent",
+    es: "Porcentaje"
+  },
+  animationsSpeed: {
+    en: "Speed",
+    es: "Velocidad"
+  },
+  blending: {
+    en: "Blending",
+    es: "Mezca"
+  },
+  blendingPercent: {
+    en: "Percent",
+    es: "Porcentaje"
+  },
   angularDamping: {
     en: "Angular Damping",
-    es: "Amortiguación Angular"
+    es: "Rebote Angular"
   },
   angularInertia: {
     en: "Angular Inertia",
     es: "Inercia Angular"
   },
-  angularImpulse: {
-    en: "Angular Impulse",
-    es: "Impulso Angular"
-  },
-  attractor: {
-    en: "Attractor",
-    es: "Atractor"
-  },
-  attractorPosition: {
-    en: "Position",
-    es: "Posición"
-  },
-  attractorForce: {
-    en: "Force",
-    es: "Fuerza"
+  autoAnimate: {
+    en: "Auto Animate",
+    es: "Animación Automática"
   },
   bounciness: {
     en: "Bounciness",
@@ -5962,37 +5888,29 @@ const labels = {
     en: "Center of Gravity",
     es: "Centro de Gravedad"
   },
-  count: {
-    en: "Count",
-    es: "Cuenta"
+  customMaterial: {
+    en: "Custom Material",
+    es: "Material Personalizado"
   },
   debug: {
     en: "Debug",
     es: "Debug"
   },
-  fadeTime: {
-    en: "Fade Time",
-    es: "Tiempo Desaparición"
-  },
-  forces: {
-    en: "Forces",
-    es: "Fuerzas"
+  fixed: {
+    en: "Fixed",
+    es: "Fijas"
   },
   friction: {
     en: "Friction",
     es: "Fricción"
   },
-  gravity: {
-    en: "Gravity",
-    es: "Gravedad"
-  },
   geometry: {
     en: "Geometry",
     es: "Geometría"
   },
-  lifeTime: {
-    en: "Life Time (s)",
-    es: "Ciclo de vida (s)"
+  influence: {
+    en: "Influence",
+    es: "Influencia"
   },
   linearDamping: {
     en: "Linear Damping",
@@ -6014,6 +5932,26 @@ const labels = {
     en: "Mesh",
     es: "Objeto"
   },
+  morph: {
+    en: "Morph",
+    es: "Estado"
+  },
+  morphIndex: {
+    en: "Morph",
+    es: "Estado"
+  },
+  morphWeight: {
+    en: "Weight",
+    es: "Estado"
+  },
+  morphs: {
+    en: "Morphs",
+    es: "Estados"
+  },
+  origin: {
+    en: "Origin",
+    es: "Origen"
+  },
   physics: {
     en: "Physics",
     es: "Físicas"
@@ -6026,230 +5964,232 @@ const labels = {
     en: "Size",
     es: "Tamaño"
   },
-  thrower: {
-    en: "Thrower",
-    es: "Disparador"
+  visible: {
+    en: "Visible",
+    es: "Visible"
   },
-  throwTime: {
-    en: "Throw Time",
-    es: "Tiempo de disparo"
-  },
-  trigger: {
-    en: "Trigger",
-    es: "Trigger"
-  },
-  spawn: {
-    en: "Spawn",
-    es: "Disparo"
-  },
-  spawnPosition: {
-    en: "Position",
-    es: "Posición"
-  },
-  spawnRandomness: {
-    en: "Randomness",
-    es: "Aleatoriedad"
+  weight: {
+    en: "Weight",
+    es: "Peso"
   }
 };
-let WORLD;
 let RAPIER_UTILS;
+let MODEL_UTILS;
 const DEFAULTS = {
-  gravity: new Vector3(0, -0.8, 0),
-  maxCount: 1e3,
+  objectId: "",
   customMaterial: false,
   material: { digoType: "physical", color: 16777215 },
-  objectId: "",
-  spawnPosition: new Vector3(0, 2, 0),
-  spawnRandomness: new Vector3(0.5, 0.5, 0.5),
-  count: 100,
-  lifeTime: 10,
-  throwTime: 10,
-  fadeTime: 0.5,
-  trigger: 1,
-  size: 1,
-  mass: 1,
-  angularInertia: 0.4,
-  angularInertiaMultiplier: 10,
-  linearDamping: 0,
-  angularDamping: 0,
+  visible: true,
+  origin: new Vector3(0, 0, 0),
+  active: true,
   restitution: 0.2,
   friction: 0.5,
-  attractorPosition: new Vector3(0, 0, 0),
-  attractorForce: 0,
-  linearImpulse: new Vector3(0, 0, 0),
-  angularImpulse: new Vector3(0, 0, 0)
+  autoAnimate: true,
+  animationsPercent: 0,
+  skeleton: false,
+  blendingPercent: 0,
+  animationsSpeed: 1,
+  blends: [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
+  animations: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  morphs: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 };
 class GeneralData extends AssetGeneralData {
   constructor() {
     super(...arguments);
-    this.properties = {
-      gravity: DEFAULTS.gravity
-    };
+    this.properties = {};
   }
 }
 class EntityData extends AssetEntityData {
   constructor() {
-    super();
+    super(...arguments);
     this.properties = {
       objectId: DEFAULTS.objectId,
-      material: { digoType: "physical", color: 16777215 },
       customMaterial: DEFAULTS.customMaterial,
-      spawnPosition: DEFAULTS.spawnPosition,
-      spawnRandomness: DEFAULTS.spawnRandomness,
-      count: DEFAULTS.count,
-      lifeTime: DEFAULTS.lifeTime,
-      throwTime: DEFAULTS.throwTime,
-      fadeTime: DEFAULTS.fadeTime,
-      trigger: DEFAULTS.trigger,
-      size: DEFAULTS.size,
-      mass: DEFAULTS.mass,
-      angularInertia: DEFAULTS.angularInertia,
-      linearDamping: DEFAULTS.linearDamping,
-      angularDamping: DEFAULTS.angularDamping,
+      material: { digoType: "physical", color: 16777215 },
+      visible: DEFAULTS.visible,
+      origin: DEFAULTS.origin,
+      active: DEFAULTS.active,
       restitution: DEFAULTS.restitution,
       friction: DEFAULTS.friction,
-      angularImpulse: DEFAULTS.angularImpulse,
-      linearImpulse: DEFAULTS.linearImpulse,
-      attractorPosition: DEFAULTS.attractorPosition,
-      attractorForce: DEFAULTS.attractorForce
+      autoAnimate: DEFAULTS.autoAnimate,
+      animationsPercent: DEFAULTS.animationsPercent,
+      skeleton: DEFAULTS.skeleton,
+      blendingPercent: DEFAULTS.blendingPercent,
+      animationsSpeed: DEFAULTS.animationsSpeed,
+      blends: DEFAULTS.blends,
+      animations: DEFAULTS.animations,
+      morphs: DEFAULTS.morphs
     };
-    this.instancedMesh = new InstancedMesh(
-      new BoxGeometry(0.05, 0.05, 0.05),
-      new MeshPhysicalMaterial({ name: `${Math.random()}` }),
-      DEFAULTS.maxCount
-    );
-    this.originalMaterial = new Material();
+    this.container = new Object3D();
+    this.previousScale = new Vector3();
     this.material = new MeshPhysicalMaterial({ name: `${Math.random()}` });
-    this.instances = [];
-    this.throwerProperties = {
-      previousTrigger: 0,
-      lastActive: 0
-    };
-    this.setInstancedMesh();
   }
-  createInstance() {
-    return {
-      physics: {},
-      properties: {
-        lifeTime: 0,
-        throwTime: 0,
-        state: 0
-        /* sleeping */
-      }
-    };
+  setModel(gltf) {
+    this.removePreviousModel();
+    this.model = MODEL_UTILS.setModel(gltf);
+    this.container.add(this.model.scene);
+    this.model.animationManager.animations.forEach((animation) => {
+      animation.action.play();
+      animation.action.setEffectiveWeight(0);
+    });
+    this.blendAnimations();
+    this.skeleton = new SkeletonHelper(this.model.scene);
+    this.skeleton.visible = this.properties.skeleton;
+    this.container.add(this.skeleton);
+    this.previousScale.set(0, 0, 0);
+    this.setPhysics(this.properties.active);
+    this.setVisibility(this.properties.visible);
+    this.setCustomMaterial(this.properties.customMaterial);
+    this.setorigin(this.properties.origin);
   }
-  setInstancedMesh() {
-    const positionMatrix = new Matrix4();
-    const position = new Vector3();
-    const quaternion = new Quaternion();
-    const scale = new Vector3();
-    for (let i2 = 0; i2 < this.instancedMesh.count; i2++) {
-      const startPosition = RAPIER_UTILS.getRandomPosition(DEFAULTS.spawnPosition, DEFAULTS.spawnRandomness);
-      positionMatrix.setPosition(startPosition);
-      positionMatrix.decompose(position, quaternion, scale);
-      scale.set(0, 0, 0);
-      positionMatrix.compose(position, quaternion, scale);
-      this.instancedMesh.setMatrixAt(i2, positionMatrix);
-      const instance = this.createInstance();
-      this.instances.push(instance);
+  removePreviousModel() {
+    if (this.model) {
+      this.model.slots.forEach((slot) => {
+        if (slot.meshPhysics) {
+          RAPIER_UTILS.removeMeshPhysics(slot.meshPhysics);
+        }
+      });
     }
-    this.instancedMesh.instanceMatrix.setUsage(DynamicDrawUsage);
-    this.instancedMesh.castShadow = true;
-    this.instancedMesh.receiveShadow = true;
-    this.instancedMesh.geometry.computeBoundingSphere();
-    this.instancedMesh.geometry.computeBoundingBox();
+    this.container.clear();
+  }
+  setVisibility(visible) {
+    var _a;
+    (_a = this.model) == null ? void 0 : _a.slots.forEach((slot) => {
+      slot.mesh.visible = visible;
+    });
+  }
+  setorigin(origin) {
+    var _a;
+    if ((_a = this.model) == null ? void 0 : _a.scene) {
+      this.model.scene.position.copy(origin);
+    }
   }
   setCustomMaterial(customMaterial) {
-    this.instancedMesh.material = customMaterial ? this.material : this.originalMaterial;
+    var _a;
+    (_a = this.model) == null ? void 0 : _a.slots.forEach((slot) => {
+      if (slot.mesh) {
+        slot.mesh.material = customMaterial ? this.material : slot.originalMaterial;
+      }
+    });
   }
-  throwInstance(index) {
-    const instance = this.instances[index];
-    instance.physics = RAPIER_UTILS.addInstancePhysics(this.instancedMesh, index);
-    const translation = RAPIER_UTILS.getRandomPosition(this.properties.spawnPosition, this.properties.spawnRandomness);
-    const rigidBody = instance.physics.rigidBody;
-    this.setPhysicsProperties(instance);
-    rigidBody.setTranslation(translation, true);
-    const rotation = new Vector3(
-      Math.random() * Math.PI * 2,
-      Math.random() * Math.PI * 2,
-      Math.random() * Math.PI * 2
-    );
-    RAPIER_UTILS.setRigidBodyRotation(rigidBody, rotation);
-    instance.properties.lifeTime = 0;
-    instance.properties.throwTime = 0;
-    instance.properties.state = 2;
-    RAPIER_UTILS.applyLinearImpulse(rigidBody, this.properties.linearImpulse);
-    RAPIER_UTILS.applyAngularImpulse(rigidBody, this.properties.angularImpulse);
+  setPhysics(active) {
+    var _a;
+    (_a = this.model) == null ? void 0 : _a.slots.forEach((slot) => {
+      if (slot.meshPhysics) {
+        RAPIER_UTILS.removeMeshPhysics(slot.meshPhysics);
+        slot.meshPhysics = void 0;
+      }
+      if (active) {
+        slot.meshPhysics = RAPIER_UTILS.addMeshPhysics(slot.mesh, true);
+      }
+    });
   }
-  activeInstance(index, deltaTime) {
-    const instance = this.instances[index];
-    instance.properties.lifeTime += deltaTime;
-    if (instance.properties.lifeTime >= this.properties.lifeTime && this.properties.lifeTime !== 0) {
-      instance.properties.state = 3;
-    } else {
-      this.moveInstance(instance, index);
-      RAPIER_UTILS.attractToPoint(instance.physics.rigidBody, this.properties.attractorPosition, this.properties.attractorForce);
+  setPhysicsProperties() {
+    var _a;
+    (_a = this.model) == null ? void 0 : _a.slots.forEach((slot) => {
+      if (slot.meshPhysics) {
+        const collider = slot.meshPhysics.collider;
+        collider.setRestitution(this.properties.restitution);
+        collider.setFriction(this.properties.friction);
+      }
+    });
+  }
+  updateTransformPhysics() {
+    var _a, _b;
+    if (this.properties.active) {
+      const scale = this.container.scale;
+      if (!scale.equals(this.previousScale)) {
+        (_a = this.model) == null ? void 0 : _a.slots.forEach((slot) => {
+          MODEL_UTILS.updateSlotPhysicsScale(slot);
+        });
+        this.previousScale.set(scale.x, scale.y, scale.z);
+      }
+      (_b = this.model) == null ? void 0 : _b.slots.forEach((slot) => {
+        var _a2, _b2, _c;
+        const rigidBody = (_a2 = slot.meshPhysics) == null ? void 0 : _a2.rigidBody;
+        const translation = (_b2 = slot.mesh) == null ? void 0 : _b2.getWorldPosition(new Vector3());
+        const queaternion = (_c = slot.mesh) == null ? void 0 : _c.getWorldQuaternion(new Quaternion());
+        rigidBody == null ? void 0 : rigidBody.setRotation(queaternion, true);
+        rigidBody == null ? void 0 : rigidBody.setTranslation(translation, true);
+      });
     }
   }
-  killInstance(index) {
-    const instance = this.instances[index];
-    this.fadeInstance(index, this.properties.fadeTime * 1e3);
-    RAPIER_UTILS.removeInstancePhysics(instance.physics);
-    instance.properties.lifeTime = 0;
-    instance.properties.throwTime = 0;
-    instance.properties.state = 0;
+  setAnimationsPercent() {
+    if (!this.properties.autoAnimate) {
+      this.model.animationManager.animations.forEach((animation) => {
+        const action = animation.action;
+        const totalDuration = action.getClip().duration;
+        const time = totalDuration * this.properties.animationsPercent / 100;
+        action.time = time;
+      });
+      const mixer = this.model.animationManager.mixer;
+      mixer.update(0);
+    }
   }
-  fadeInstance(index, milliseconds) {
-    const startTime = Date.now();
-    const position = new Vector3();
-    const quaternion = new Quaternion();
-    const scale = new Vector3();
-    const instanceMatrix = new Matrix4();
-    this.instancedMesh.getMatrixAt(index, instanceMatrix);
-    instanceMatrix.decompose(position, quaternion, scale);
-    const targetScale = new Vector3(0, 0, 0);
-    const intervalId = setInterval(() => {
-      const elapsedTime = Date.now() - startTime;
-      if (elapsedTime >= milliseconds) {
-        clearInterval(intervalId);
+  blendAnimations() {
+    const animations = this.model.animationManager.animations;
+    const blends = this.getBlends();
+    const length = blends.length;
+    const blend = this.properties.blendingPercent / 100 * (length - 1);
+    const blendIndex = Math.floor(blend);
+    const blendFrac = blend - blendIndex;
+    blends.forEach((animationIndex, index) => {
+      const action = animations[animationIndex].action;
+      let weight = this.properties.animations[animationIndex];
+      if (index === blendIndex) {
+        weight += 1 - blendFrac;
+      } else if (index === blendIndex + 1) {
+        weight += blendFrac;
       }
-      const progress = MathUtils.smoothstep(elapsedTime, 0, milliseconds);
-      scale.lerp(targetScale, progress);
-      const matrix = new Matrix4();
-      matrix.compose(position, quaternion, scale);
-      this.instancedMesh.setMatrixAt(index, matrix);
-      this.instancedMesh.instanceMatrix.needsUpdate = true;
-    }, 10);
+      action.setEffectiveWeight(weight);
+    });
+    animations.forEach((animation, index) => {
+      if (!blends.includes(index))
+        animation.action.setEffectiveWeight(this.properties.animations[index]);
+    });
   }
-  moveInstance(instance, index) {
-    const rigidBody = instance.physics.rigidBody;
-    const quaternion = new Quaternion();
-    const position = new Vector3();
-    const scale = new Vector3(1, 1, 1);
-    const matrix = new Matrix4();
-    const array = this.instancedMesh.instanceMatrix.array;
-    position.copy(rigidBody.translation());
-    quaternion.copy(rigidBody.rotation());
-    matrix.compose(position, quaternion, scale).toArray(array, index * 16);
+  setAnimationWeight(index) {
+    if (this.isValidIndex(index)) {
+      const action = this.model.animationManager.animations[index].action;
+      const weight = this.properties.animations[index];
+      action.setEffectiveWeight(weight);
+    }
   }
-  setPhysicsProperties(instance) {
-    const collider = instance.physics.collider;
-    collider.setRestitution(this.properties.restitution);
-    collider.setFriction(this.properties.friction);
-    const rigidBody = instance.physics.rigidBody;
-    const geometry = this.instancedMesh.geometry;
-    Math.sqrt(geometry.boundingSphere.radius);
-    const mass = this.properties.mass;
-    const angularInertiaValue = this.properties.angularInertia;
-    const angularInertia = new Vector3(angularInertiaValue, angularInertiaValue, angularInertiaValue);
-    const centerOfMass = geometry.boundingBox.getCenter(new Vector3());
-    const angularInertiaLocalFrame = new Bg.Quaternion(0, 0, 0, 1);
-    rigidBody.setAdditionalMassProperties(mass, centerOfMass, angularInertia, angularInertiaLocalFrame, true);
-    rigidBody.setAngularDamping(this.properties.angularDamping);
-    rigidBody.setLinearDamping(this.properties.linearDamping);
+  setAnimationSpeed() {
+    var _a;
+    if ((_a = this.model) == null ? void 0 : _a.animationManager) {
+      this.model.animationManager.animations.forEach((animation) => {
+        animation.action.timeScale = this.properties.animationsSpeed;
+      });
+    }
+  }
+  getBlends() {
+    const actions = [];
+    this.properties.blends.forEach((action) => {
+      if (this.isValidIndex(action)) {
+        actions.push(action);
+      }
+    });
+    return actions;
+  }
+  setMorphsInfluence(index) {
+    var _a;
+    const slots = (_a = this.model) == null ? void 0 : _a.slots;
+    if (slots) {
+      slots.forEach((slot) => {
+        var _a2;
+        if ((_a2 = slot.morphTargets) == null ? void 0 : _a2.find((morphTarget) => morphTarget.index === index)) {
+          slot.mesh.morphTargetInfluences[index] = this.properties.morphs[index];
+        }
+      });
+    }
+  }
+  isValidIndex(index) {
+    var _a;
+    return !!((_a = this.model) == null ? void 0 : _a.animationManager.animations[index]);
   }
 }
-class Thrower extends DigoAssetThree {
+class Model extends DigoAssetThree {
   constructor(entities) {
     var _a, _b, _c;
     super();
@@ -6258,9 +6198,8 @@ class Thrower extends DigoAssetThree {
     const scene = (_a = Helper.getGlobal()) == null ? void 0 : _a.getThreeScene();
     const rapierWorld = (_b = Helper.getGlobal()) == null ? void 0 : _b.getRapierWorld();
     const rapierInstance = (_c = Helper.getGlobal()) == null ? void 0 : _c.getRapierInstance();
-    const rapierUtils = new RapierUtils(scene, rapierWorld, rapierInstance);
-    WORLD = rapierWorld;
-    RAPIER_UTILS = rapierUtils;
+    RAPIER_UTILS = new RapierUtils(scene, rapierWorld, rapierInstance);
+    MODEL_UTILS = new ModelUtils(RAPIER_UTILS);
     this.setLabels(labels);
     const generalData = new GeneralData();
     generalData.container = new Scene();
@@ -6273,7 +6212,7 @@ class Thrower extends DigoAssetThree {
   }
   createEntity(id) {
     const entityData = new EntityData();
-    const component = entityData.instancedMesh;
+    const component = entityData.container;
     entityData.component = component;
     this.addEntity(id, entityData);
     this.getContainer().add(component);
@@ -6281,9 +6220,13 @@ class Thrower extends DigoAssetThree {
   addProperties() {
     this.addGeneralProperties();
     this.addMeshProperties();
-    this.addThrowerProperties();
     this.addPhysicsProperties();
-    this.addAttractorProperties();
+    this.addAnimationsProperties();
+    this.addAnimationsControlProperties();
+    this.addBlendingProperties();
+    this.addMorphsProperties();
+    DEFAULTS.morphs.forEach((_2, index) => {
+    });
   }
   addGeneralProperties() {
     this.addPropertyBoolean(GENERAL_PROPERTY, "debug", true).setter((data, value) => {
@@ -6293,47 +6236,6 @@ class Thrower extends DigoAssetThree {
     }).getter((data) => {
       return RAPIER_UTILS.enabled ?? false;
     });
-    this.addPropertyXYZ(GENERAL_PROPERTY, "gravity", false, DEFAULTS.gravity.x, DEFAULTS.gravity.y, DEFAULTS.gravity.z).setter((data, value) => {
-      data.properties.gravity = value;
-      WORLD.gravity = value;
-    }).getter((data) => data.properties.gravity);
-  }
-  addAttractorProperties() {
-    this.addPropertyXYZ(ENTITY_PROPERTY, "attractorPosition", false, DEFAULTS.attractorPosition.x, DEFAULTS.attractorPosition.y, DEFAULTS.attractorPosition.z).group("attractor").setter((data, value) => {
-      data.properties.attractorPosition = value;
-    }).getter((data) => data.properties.attractorPosition);
-    this.addPropertyNumber(ENTITY_PROPERTY, "attractorForce", 0, 1e3, 2, 0.01, DEFAULTS.attractorForce).group("attractor").setter((data, value) => {
-      data.properties.attractorForce = value;
-    }).getter((data) => data.properties.attractorForce);
-  }
-  addThrowerProperties() {
-    this.addPropertyXYZ(ENTITY_PROPERTY, "spawnPosition", false, DEFAULTS.spawnPosition.x, DEFAULTS.spawnPosition.y, DEFAULTS.spawnPosition.z).group("thrower").setter((data, value) => {
-      data.properties.spawnPosition = value;
-    }).getter((data) => data.properties.spawnPosition);
-    this.addPropertyXYZ(ENTITY_PROPERTY, "spawnRandomness", false, DEFAULTS.spawnRandomness.x, DEFAULTS.spawnRandomness.y, DEFAULTS.spawnRandomness.z).group("thrower").setter((data, value) => {
-      data.properties.spawnRandomness = value;
-    }).getter((data) => data.properties.spawnRandomness);
-    this.addPropertyNumber(ENTITY_PROPERTY, "count", 1, DEFAULTS.maxCount, 0, 1, DEFAULTS.count).group("thrower").setter((data, value) => {
-      data.properties.count = value;
-    }).getter((data) => data.properties.count);
-    this.addPropertyNumber(ENTITY_PROPERTY, "lifeTime", 0, 60, 2, 0.01, DEFAULTS.lifeTime).group("thrower").setter((data, value) => {
-      data.properties.lifeTime = value;
-    }).getter((data) => data.properties.lifeTime);
-    this.addPropertyNumber(ENTITY_PROPERTY, "throwTime", 0, 60, 2, 0.01, DEFAULTS.throwTime).group("thrower").setter((data, value) => {
-      data.properties.throwTime = value;
-    }).getter((data) => data.properties.throwTime);
-    this.addPropertyNumber(ENTITY_PROPERTY, "fadeTime", 0, 2, 2, 0.01, DEFAULTS.fadeTime).group("thrower").setter((data, value) => {
-      data.properties.fadeTime = value;
-    }).getter((data) => data.properties.fadeTime);
-    this.addPropertyNumber(ENTITY_PROPERTY, "trigger", 0, 1, 2, 0.01, DEFAULTS.trigger).group("thrower").setter((data, value) => {
-      data.properties.trigger = value;
-    }).getter((data) => data.properties.trigger);
-    this.addPropertyXYZ(ENTITY_PROPERTY, "linearImpulse", false, DEFAULTS.linearImpulse.x, DEFAULTS.linearImpulse.y, DEFAULTS.linearImpulse.z).group("thrower").setter((data, value) => {
-      data.properties.linearImpulse = value;
-    }).getter((data) => data.properties.linearImpulse);
-    this.addPropertyXYZ(ENTITY_PROPERTY, "angularImpulse", false, DEFAULTS.angularImpulse.x, DEFAULTS.angularImpulse.y, DEFAULTS.angularImpulse.z).group("thrower").setter((data, value) => {
-      data.properties.angularImpulse = value;
-    }).getter((data) => data.properties.angularImpulse);
   }
   addMeshProperties() {
     this.addPropertyObject3D(ENTITY_PROPERTY, "geometry").group("mesh").setter((data, value) => {
@@ -6343,61 +6245,86 @@ class Thrower extends DigoAssetThree {
       data.properties.customMaterial = value;
       data.setCustomMaterial(value);
     }).getter((data) => data.properties.customMaterial);
-    this.addPropertyMaterial(ENTITY_PROPERTY, "material", DEFAULTS.material).group("mesh").setter((data, value, property) => this.updateMaterial(data, data.properties, "material", property, value)).getter((data) => data.properties.material);
+    this.addPropertyMaterial(ENTITY_PROPERTY, "material", DEFAULTS.material).group("mesh").setter((data, value, property) => {
+      this.updateMaterial(data, data.properties, "material", property, value);
+    }).getter((data) => data.properties.material);
+    this.addPropertyBoolean(ENTITY_PROPERTY, "visible", DEFAULTS.visible).group("mesh").setter((data, value) => {
+      data.properties.visible = value;
+      data.setVisibility(value);
+    }).getter((data) => data.properties.visible);
+    this.addPropertyXYZ(ENTITY_PROPERTY, "origin", true, DEFAULTS.origin.x, DEFAULTS.origin.y, DEFAULTS.origin.z).group("mesh").setter((data, value) => {
+      data.properties.origin = value;
+      data.setorigin(value);
+    }).getter((data) => data.properties.origin);
+  }
+  addAnimationsProperties() {
+    DEFAULTS.animations.forEach((_2, index) => {
+      this.addPropertyNumber(ENTITY_PROPERTY, `Animation ${index}`, 0, 1, 2, 0.01, DEFAULTS.animations[index]).group("animations").setter((data, value) => {
+        data.properties.animations[index] = value;
+        data.setAnimationWeight(index);
+        data.blendAnimations();
+      }).getter((data) => data.properties.animations[index]);
+    });
+  }
+  addMorphsProperties() {
+    DEFAULTS.morphs.forEach((_2, index) => {
+      this.addPropertyNumber(ENTITY_PROPERTY, `Morph ${index}`, 0, 1, 2, 0.01, DEFAULTS.morphs[index]).group("morphs").setter((data, value) => {
+        data.properties.morphs[index] = value;
+        data.setMorphsInfluence(index);
+      }).getter((data) => data.properties.morphs[index]);
+    });
+  }
+  addBlendingProperties() {
+    this.addPropertyNumber(ENTITY_PROPERTY, "blendingPercent", 0, 100, 2, 0.01, DEFAULTS.blendingPercent).group("blending").setter((data, value) => {
+      data.properties.blendingPercent = value;
+      data.blendAnimations();
+    }).getter((data) => data.properties.blendingPercent);
+    DEFAULTS.blends.forEach((_2, index) => {
+      this.addPropertyNumber(ENTITY_PROPERTY, `Blend ${index}`, -1, 9, 0, 1, DEFAULTS.blends[index]).group("blending").setter((data, value) => {
+        data.properties.blends[index] = value;
+        data.blendAnimations();
+      }).getter((data) => data.properties.blends[index]);
+    });
+  }
+  addAnimationsControlProperties() {
+    this.addPropertyNumber(ENTITY_PROPERTY, "animationsSpeed", 0, 10, 2, 0.01, DEFAULTS.animationsSpeed).group("animationsControl").setter((data, value) => {
+      data.properties.animationsSpeed = value;
+      data.setAnimationSpeed();
+    }).getter((data) => data.properties.animationsSpeed);
+    this.addPropertyBoolean(ENTITY_PROPERTY, "autoAnimate", DEFAULTS.autoAnimate).group("animationsControl").setter((data, value) => {
+      data.properties.autoAnimate = value;
+      if (!value) {
+        data.setAnimationsPercent();
+      }
+    }).getter((data) => data.properties.autoAnimate);
+    this.addPropertyNumber(ENTITY_PROPERTY, "animationsPercent", 0, 100, 2, 0.01, DEFAULTS.animationsPercent).group("animationsControl").setter((data, value) => {
+      data.properties.animationsPercent = value;
+      data.setAnimationsPercent();
+    }).getter((data) => data.properties.animationsPercent);
+    this.addPropertyBoolean(ENTITY_PROPERTY, "skeleton", DEFAULTS.skeleton).group("animationsControl").setter((data, value) => {
+      data.properties.skeleton = value;
+      if (data.skeleton) {
+        data.skeleton.visible = value;
+      }
+    }).getter((data) => data.properties.skeleton);
   }
   addPhysicsProperties() {
-    this.addPropertyNumber(ENTITY_PROPERTY, "size", 0.01, 100, 2, 0.01, DEFAULTS.size).group("physics").setter((data, value) => {
-      data.instancedMesh.geometry.scale(1 / data.properties.size, 1 / data.properties.size, 1 / data.properties.size);
-      data.properties.size = value;
-      data.instancedMesh.geometry.scale(data.properties.size, data.properties.size, data.properties.size);
-      data.instancedMesh.geometry.computeVertexNormals();
-      data.instancedMesh.geometry.computeBoundingSphere();
-      data.instancedMesh.geometry.computeTangents();
-      data.instancedMesh.geometry.computeBoundingBox();
-    }).getter((data) => data.properties.size);
-    this.addPropertyNumber(ENTITY_PROPERTY, "mass", 0, 100, 2, 0.01, DEFAULTS.mass).group("physics").setter((data, value) => {
-      data.properties.mass = value;
-    }).getter((data) => data.properties.mass);
-    this.addPropertyNumber(ENTITY_PROPERTY, "angularInertia", 0, 2, 2, 0.01, DEFAULTS.angularInertia).group("physics").setter((data, value) => {
-      data.properties.angularInertia = value / DEFAULTS.angularInertiaMultiplier;
-    }).getter((data) => data.properties.angularInertia * DEFAULTS.angularInertiaMultiplier);
-    this.addPropertyNumber(ENTITY_PROPERTY, "linearDamping", 0, 100, 2, 0.01, DEFAULTS.linearDamping).group("physics").setter((data, value) => {
-      data.properties.linearDamping = value;
-    }).getter((data) => data.properties.linearDamping);
-    this.addPropertyNumber(ENTITY_PROPERTY, "angularDamping", 0, 100, 2, 0.01, DEFAULTS.angularDamping).group("physics").setter((data, value) => {
-      data.properties.angularDamping = value;
-    }).getter((data) => data.properties.angularDamping);
+    this.addPropertyBoolean(ENTITY_PROPERTY, "active", DEFAULTS.active).group("physics").setter((data, value) => {
+      data.properties.active = value;
+      data.setPhysics(value);
+    }).getter((data) => data.properties.active);
     this.addPropertyNumber(ENTITY_PROPERTY, "friction", 0, 10, 2, 0.01, DEFAULTS.friction).group("physics").setter((data, value) => {
       data.properties.friction = value;
+      data.setPhysicsProperties();
     }).getter((data) => data.properties.friction);
     this.addPropertyNumber(ENTITY_PROPERTY, "restitution", 0, 10, 2, 0.01, DEFAULTS.restitution).group("physics").setter((data, value) => {
       data.properties.restitution = value;
+      data.setPhysicsProperties();
     }).getter((data) => data.properties.restitution);
   }
   updateGeometry(data, id) {
     this.loadGLTF(id, (gltf) => {
-      const geometries = [];
-      let material = new Material();
-      gltf.scene.traverse((node) => {
-        if (node instanceof Mesh) {
-          const mesh = node;
-          geometries.push(mesh.geometry);
-          material = node.material;
-        }
-      });
-      const mergedGeometry = mergeGeometries(geometries);
-      mergedGeometry.computeVertexNormals();
-      mergedGeometry.computeBoundingSphere();
-      mergedGeometry.computeTangents();
-      mergedGeometry.computeBoundingBox();
-      const size = mergedGeometry.boundingBox.getSize(new Vector3());
-      const scaleFactor = 1 / Math.max(size.x, size.y, size.z) / 10;
-      const scaleMatrix = new Matrix4().makeScale(scaleFactor, scaleFactor, scaleFactor);
-      mergedGeometry.applyMatrix4(scaleMatrix);
-      mergedGeometry.scale(data.properties.size, data.properties.size, data.properties.size);
-      data.instancedMesh.geometry = mergedGeometry;
-      data.originalMaterial = material;
-      data.setCustomMaterial(data.properties.customMaterial);
+      data.setModel(gltf);
     });
     data.properties.objectId = id;
   }
@@ -6407,39 +6334,12 @@ class Thrower extends DigoAssetThree {
     this.getEntities().forEach(
       (entityName) => {
         const entityData = this.getEntity(entityName);
-        const instances = entityData.instances;
         const properties = entityData.properties;
-        const throwerProperties = entityData.throwerProperties;
-        const count = entityData.instancedMesh.count;
-        if (properties.trigger > 0.5 && throwerProperties.previousTrigger <= 0.5) {
-          for (let i2 = 0; i2 < properties.count; i2++) {
-            if (entityData.throwerProperties.lastActive >= count) {
-              entityData.throwerProperties.lastActive = 0;
-            }
-            const instance = instances[entityData.throwerProperties.lastActive];
-            const throwTime = parameters.elapsedTime + properties.throwTime * i2 / properties.count;
-            instance.properties.lifeTime = 0;
-            instance.properties.throwTime = throwTime;
-            instance.properties.state = 1;
-            entityData.throwerProperties.lastActive += 1;
-          }
+        const model = entityData.model;
+        if (properties.autoAnimate && (model == null ? void 0 : model.animationManager)) {
+          model.animationManager.mixer.update(this.deltaTime);
         }
-        entityData.throwerProperties.previousTrigger = properties.trigger;
-        for (let index = 0; index < count; index++) {
-          const state = instances[index].properties.state;
-          const throwTime = instances[index].properties.throwTime;
-          if (state === 1 && throwTime <= parameters.elapsedTime && throwTime !== 0) {
-            entityData.throwInstance(index);
-          }
-          if (state === 2) {
-            entityData.activeInstance(index, this.deltaTime);
-          }
-          if (state === 3) {
-            entityData.killInstance(index);
-          }
-        }
-        entityData.instancedMesh.instanceMatrix.needsUpdate = true;
-        entityData.instancedMesh.computeBoundingSphere();
+        entityData.updateTransformPhysics();
       }
     );
     super.tick(parameters);
@@ -6451,11 +6351,11 @@ class Thrower extends DigoAssetThree {
 const digoAssetData = {
   info: {
     name: {
-      en: "Thrower",
-      es: "Disparador"
+      en: "Model",
+      es: "Modelo"
     },
     category: "objects",
-    icon: "AutoAwesome",
+    icon: "ViewInAr",
     vendor: "Digo",
     license: "MIT",
     version: "1.0",
@@ -6465,7 +6365,7 @@ const digoAssetData = {
     }
   },
   create: (entities) => {
-    return new Thrower(entities || []);
+    return new Model(entities || []);
   }
 };
 Helper.loadAsset(digoAssetData);
