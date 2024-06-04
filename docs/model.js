@@ -1,4 +1,4 @@
-import { B as Box3, V as Vector3, A as AnimationMixer, M as Mesh, L as LineSegments, a as BufferGeometry, b as LineBasicMaterial, c as BufferAttribute, d as BoxGeometry, S as SphereGeometry, I as IcosahedronGeometry, Q as Quaternion, E as Euler, e as Scene, O as Object3D, f as MeshPhysicalMaterial, g as SkeletonHelper } from "./three.js";
+import { O as Object3D, M as MeshPhysicalMaterial, S as SkeletonHelper, B as Box3, V as Vector3, A as AnimationMixer, a as Mesh, Q as Quaternion, L as LineSegments, b as BufferGeometry, c as LineBasicMaterial, d as BufferAttribute, e as BoxGeometry, f as SphereGeometry, I as IcosahedronGeometry, E as Euler, g as Scene } from "./three.js";
 (function polyfill() {
   const relList = document.createElement("link").relList;
   if (relList && relList.supports && relList.supports("modulepreload")) {
@@ -56,6 +56,8 @@ class Helper {
         loadResourceAsBase64: async (id) => "",
         loadGLTF: (id, onLoad) => {
         },
+        loadRGBE: (id, onLoad) => {
+        },
         getResourceURL: (id) => "",
         forceRefresh: () => {
         },
@@ -72,6 +74,8 @@ class Helper {
         getThreeCamera: () => {
         },
         getThreeScene: () => {
+        },
+        getThreeOrbitControls: () => {
         },
         getRapierWorld: () => {
         },
@@ -111,7 +115,6 @@ class Helper {
     }
   }
 }
-const GENERAL_PROPERTY = true;
 const ENTITY_PROPERTY = false;
 var AssetPropertyId = /* @__PURE__ */ ((AssetPropertyId2) => {
   AssetPropertyId2["POSITION"] = "position";
@@ -349,6 +352,16 @@ class Asset {
       general,
       keys,
       icons
+    };
+    return this.addProperty(general, property);
+  }
+  addPropertyDropdown(general, id, defaultValue, keys) {
+    const property = {
+      id,
+      type: "dropdown",
+      defaultValue,
+      general,
+      keys
     };
     return this.addProperty(general, property);
   }
@@ -639,6 +652,10 @@ class DigoAssetThree extends Asset {
     var _a;
     (_a = Helper.getGlobal()) == null ? void 0 : _a.loadGLTF(id, onLoad);
   }
+  loadRGBE(id, onLoad) {
+    var _a;
+    (_a = Helper.getGlobal()) == null ? void 0 : _a.loadRGBE(id, onLoad);
+  }
   updateMaterial(mesh, object, field, property, value) {
     var _a;
     (_a = Helper.getGlobal()) == null ? void 0 : _a.updateMaterial(mesh, property, value, object[field]);
@@ -659,16 +676,25 @@ class DigoAssetThree extends Asset {
   }
 }
 let RAPIER_UTILS$1;
-class ModelUtils {
+class ImportedModel extends Object3D {
   constructor(rapierUtils) {
     RAPIER_UTILS$1 = rapierUtils;
+    super();
+    this.material = new MeshPhysicalMaterial({ name: `${Math.random()}` });
   }
   setModel(gltf) {
+    this.removePreviousModel();
     const scene = this.getScene(gltf);
     const animationManager = this.getAnimations(gltf.animations, scene);
     const slots = this.getSlots(scene);
-    const model = { scene, animationManager, slots };
-    return model;
+    this.model = { scene, animationManager, slots };
+    this.add(this.model.scene);
+    this.startAnimations();
+    this.skeleton = new SkeletonHelper(this.model.scene);
+    this.add(this.skeleton);
+  }
+  showSkeleton(show) {
+    this.skeleton.visible = show;
   }
   getScene(gltf) {
     const scene = gltf.scene;
@@ -694,6 +720,13 @@ class ModelUtils {
       animations
     };
   }
+  startAnimations() {
+    var _a;
+    (_a = this.model) == null ? void 0 : _a.animationManager.animations.forEach((animation) => {
+      animation.action.play();
+      animation.action.setEffectiveWeight(0);
+    });
+  }
   getSlots(scene) {
     const slots = [];
     scene.traverse((node) => {
@@ -707,16 +740,182 @@ class ModelUtils {
         }
         const meshPhysics = RAPIER_UTILS$1.addMeshPhysics(node, true);
         const originalMaterial = node.material;
+        node.castShadow = true;
+        node.receiveShadow = true;
         slots.push({ mesh: node, meshPhysics, originalMaterial, morphTargets });
       }
     });
     return slots;
+  }
+  removePreviousModel() {
+    var _a, _b;
+    (_a = this.model) == null ? void 0 : _a.slots.forEach((slot) => {
+      if (slot.meshPhysics) {
+        RAPIER_UTILS$1.removeMeshPhysics(slot.meshPhysics);
+      }
+    });
+    if ((_b = this.model) == null ? void 0 : _b.scene)
+      this.remove(this.model.scene);
+    if (this.skeleton) {
+      this.remove(this.skeleton);
+    }
+  }
+  setVisibility(visible) {
+    var _a;
+    (_a = this.model) == null ? void 0 : _a.slots.forEach((slot) => {
+      slot.mesh.visible = visible;
+    });
+  }
+  setorigin(origin) {
+    var _a;
+    if ((_a = this.model) == null ? void 0 : _a.scene) {
+      this.model.scene.position.copy(origin);
+    }
+  }
+  setCustomMaterial(customMaterial) {
+    var _a;
+    (_a = this.model) == null ? void 0 : _a.slots.forEach((slot) => {
+      if (slot.mesh) {
+        slot.mesh.material = customMaterial ? this.material : slot.originalMaterial;
+      }
+    });
+  }
+  setPhysics(active) {
+    var _a;
+    (_a = this.model) == null ? void 0 : _a.slots.forEach((slot) => {
+      if (slot.meshPhysics) {
+        RAPIER_UTILS$1.removeMeshPhysics(slot.meshPhysics);
+        slot.meshPhysics = void 0;
+      }
+      if (active) {
+        slot.meshPhysics = RAPIER_UTILS$1.addMeshPhysics(slot.mesh, true);
+      }
+    });
+  }
+  setPhysicsRestitution(restitution) {
+    var _a;
+    (_a = this.model) == null ? void 0 : _a.slots.forEach((slot) => {
+      if (slot.meshPhysics) {
+        const collider = slot.meshPhysics.collider;
+        collider.setRestitution(restitution);
+      }
+    });
+  }
+  setPhysicsFriction(friction) {
+    var _a;
+    (_a = this.model) == null ? void 0 : _a.slots.forEach((slot) => {
+      if (slot.meshPhysics) {
+        const collider = slot.meshPhysics.collider;
+        collider.setFriction(friction);
+      }
+    });
+  }
+  updateTransformPhysics(updateScale) {
+    var _a, _b;
+    if (updateScale) {
+      (_a = this.model) == null ? void 0 : _a.slots.forEach((slot) => {
+        if (slot.meshPhysics && slot.mesh) {
+          RAPIER_UTILS$1.removeMeshPhysics(slot.meshPhysics);
+          slot.meshPhysics = RAPIER_UTILS$1.addMeshPhysics(slot.mesh, true);
+        }
+      });
+    }
+    (_b = this.model) == null ? void 0 : _b.slots.forEach((slot) => {
+      var _a2, _b2, _c;
+      const rigidBody = (_a2 = slot.meshPhysics) == null ? void 0 : _a2.rigidBody;
+      const translation = (_b2 = slot.mesh) == null ? void 0 : _b2.getWorldPosition(new Vector3());
+      const queaternion = (_c = slot.mesh) == null ? void 0 : _c.getWorldQuaternion(new Quaternion());
+      rigidBody == null ? void 0 : rigidBody.setRotation(queaternion, true);
+      rigidBody == null ? void 0 : rigidBody.setTranslation(translation, true);
+    });
   }
   updateSlotPhysicsScale(slot) {
     if (slot.meshPhysics && slot.mesh) {
       RAPIER_UTILS$1.removeMeshPhysics(slot.meshPhysics);
       slot.meshPhysics = RAPIER_UTILS$1.addMeshPhysics(slot.mesh, true);
     }
+  }
+  setMorphInfluence(index, influence) {
+    var _a;
+    const slots = (_a = this.model) == null ? void 0 : _a.slots;
+    if (slots) {
+      slots.forEach((slot) => {
+        var _a2;
+        if ((_a2 = slot.morphTargets) == null ? void 0 : _a2.find((morphTarget) => morphTarget.index === index)) {
+          slot.mesh.morphTargetInfluences[index] = influence;
+        }
+      });
+    }
+  }
+  animationExist(index) {
+    var _a;
+    return !!((_a = this.model) == null ? void 0 : _a.animationManager.animations[index]);
+  }
+  getValidBlends(blends) {
+    const validBlends = [];
+    blends.forEach((animationIndex) => {
+      if (this.animationExist(animationIndex)) {
+        validBlends.push(animationIndex);
+      }
+    });
+    return validBlends;
+  }
+  setAnimationsSpeed(speed) {
+    var _a;
+    if ((_a = this.model) == null ? void 0 : _a.animationManager) {
+      this.model.animationManager.animations.forEach((animation) => {
+        animation.action.timeScale = speed;
+      });
+    }
+  }
+  setAnimationWeight(index, weight) {
+    if (this.animationExist(index)) {
+      const action = this.model.animationManager.animations[index].action;
+      action.setEffectiveWeight(weight);
+    }
+  }
+  blendAnimations(blends, weights, percent) {
+    var _a;
+    if ((_a = this.model) == null ? void 0 : _a.animationManager) {
+      const animations = this.model.animationManager.animations;
+      const validBlends = this.getValidBlends(blends);
+      const length = validBlends.length;
+      const blend = percent / 100 * (length - 1);
+      const blendIndex = Math.floor(blend);
+      const blendFrac = blend - blendIndex;
+      validBlends.forEach((animationIndex, index) => {
+        const action = animations[animationIndex].action;
+        let weight = weights[animationIndex];
+        if (index === blendIndex) {
+          weight += 1 - blendFrac;
+        } else if (index === blendIndex + 1) {
+          weight += blendFrac;
+        }
+        action.setEffectiveWeight(weight);
+      });
+      animations.forEach((animation, index) => {
+        if (!validBlends.includes(index))
+          animation.action.setEffectiveWeight(weights[index]);
+      });
+    }
+  }
+  setManualTime(percent) {
+    var _a;
+    (_a = this.model) == null ? void 0 : _a.animationManager.animations.forEach((animation) => {
+      const action = animation.action;
+      const totalDuration = action.getClip().duration;
+      const time = totalDuration * percent / 100;
+      action.time = time;
+    });
+    const mixer = this.model.animationManager.mixer;
+    mixer.update(0);
+  }
+  tick(autoAnimate, physics, updateScale, deltaTime) {
+    var _a;
+    if (autoAnimate)
+      (_a = this.model) == null ? void 0 : _a.animationManager.mixer.update(deltaTime);
+    if (physics)
+      this.updateTransformPhysics(updateScale);
   }
 }
 let A;
@@ -5700,14 +5899,13 @@ var Bg = Object.freeze({ __proto__: null, version: Cg, Vector3: GA, VectorOps: w
 class RapierUtils {
   constructor(scene, world, rapier) {
     this.mesh = new LineSegments(new BufferGeometry(), new LineBasicMaterial({ color: 16777215, vertexColors: true }));
-    this.enabled = true;
     this.world = world;
     this.rapier = rapier;
     this.mesh.frustumCulled = false;
     scene.add(this.mesh);
   }
-  updateDebug() {
-    if (this.enabled) {
+  updateDebug(debug) {
+    if (debug) {
       const { vertices, colors } = this.world.debugRender();
       this.mesh.geometry.setAttribute("position", new BufferAttribute(vertices, 3));
       this.mesh.geometry.setAttribute("color", new BufferAttribute(colors, 4));
@@ -5960,9 +6158,17 @@ const labels = {
     en: "Bouncinness",
     es: "Rebote"
   },
+  shadows: {
+    en: "Shadows",
+    es: "Shadows"
+  },
   size: {
     en: "Size",
     es: "Tamaño"
+  },
+  skeleton: {
+    en: "Show Skeleton",
+    es: "Mostrar Esqueleto"
   },
   visible: {
     en: "Visible",
@@ -5974,7 +6180,6 @@ const labels = {
   }
 };
 let RAPIER_UTILS;
-let MODEL_UTILS;
 const DEFAULTS = {
   objectId: "",
   customMaterial: false,
@@ -5994,10 +6199,6 @@ const DEFAULTS = {
   morphs: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 };
 class GeneralData extends AssetGeneralData {
-  constructor() {
-    super(...arguments);
-    this.properties = {};
-  }
 }
 class EntityData extends AssetEntityData {
   constructor() {
@@ -6020,173 +6221,18 @@ class EntityData extends AssetEntityData {
       animations: DEFAULTS.animations,
       morphs: DEFAULTS.morphs
     };
-    this.container = new Object3D();
+    this.importedModel = new ImportedModel(RAPIER_UTILS);
     this.previousScale = new Vector3();
-    this.material = new MeshPhysicalMaterial({ name: `${Math.random()}` });
   }
-  setModel(gltf) {
-    this.removePreviousModel();
-    this.model = MODEL_UTILS.setModel(gltf);
-    this.container.add(this.model.scene);
-    this.model.animationManager.animations.forEach((animation) => {
-      animation.action.play();
-      animation.action.setEffectiveWeight(0);
-    });
-    this.blendAnimations();
-    this.skeleton = new SkeletonHelper(this.model.scene);
-    this.skeleton.visible = this.properties.skeleton;
-    this.container.add(this.skeleton);
+  updateModel(gltf) {
     this.previousScale.set(0, 0, 0);
-    this.setPhysics(this.properties.active);
-    this.setVisibility(this.properties.visible);
-    this.setCustomMaterial(this.properties.customMaterial);
-    this.setorigin(this.properties.origin);
-  }
-  removePreviousModel() {
-    if (this.model) {
-      this.model.slots.forEach((slot) => {
-        if (slot.meshPhysics) {
-          RAPIER_UTILS.removeMeshPhysics(slot.meshPhysics);
-        }
-      });
-    }
-    this.container.clear();
-  }
-  setVisibility(visible) {
-    var _a;
-    (_a = this.model) == null ? void 0 : _a.slots.forEach((slot) => {
-      slot.mesh.visible = visible;
-    });
-  }
-  setorigin(origin) {
-    var _a;
-    if ((_a = this.model) == null ? void 0 : _a.scene) {
-      this.model.scene.position.copy(origin);
-    }
-  }
-  setCustomMaterial(customMaterial) {
-    var _a;
-    (_a = this.model) == null ? void 0 : _a.slots.forEach((slot) => {
-      if (slot.mesh) {
-        slot.mesh.material = customMaterial ? this.material : slot.originalMaterial;
-      }
-    });
-  }
-  setPhysics(active) {
-    var _a;
-    (_a = this.model) == null ? void 0 : _a.slots.forEach((slot) => {
-      if (slot.meshPhysics) {
-        RAPIER_UTILS.removeMeshPhysics(slot.meshPhysics);
-        slot.meshPhysics = void 0;
-      }
-      if (active) {
-        slot.meshPhysics = RAPIER_UTILS.addMeshPhysics(slot.mesh, true);
-      }
-    });
-  }
-  setPhysicsProperties() {
-    var _a;
-    (_a = this.model) == null ? void 0 : _a.slots.forEach((slot) => {
-      if (slot.meshPhysics) {
-        const collider = slot.meshPhysics.collider;
-        collider.setRestitution(this.properties.restitution);
-        collider.setFriction(this.properties.friction);
-      }
-    });
-  }
-  updateTransformPhysics() {
-    var _a, _b;
-    if (this.properties.active) {
-      const scale = this.container.scale;
-      if (!scale.equals(this.previousScale)) {
-        (_a = this.model) == null ? void 0 : _a.slots.forEach((slot) => {
-          MODEL_UTILS.updateSlotPhysicsScale(slot);
-        });
-        this.previousScale.set(scale.x, scale.y, scale.z);
-      }
-      (_b = this.model) == null ? void 0 : _b.slots.forEach((slot) => {
-        var _a2, _b2, _c;
-        const rigidBody = (_a2 = slot.meshPhysics) == null ? void 0 : _a2.rigidBody;
-        const translation = (_b2 = slot.mesh) == null ? void 0 : _b2.getWorldPosition(new Vector3());
-        const queaternion = (_c = slot.mesh) == null ? void 0 : _c.getWorldQuaternion(new Quaternion());
-        rigidBody == null ? void 0 : rigidBody.setRotation(queaternion, true);
-        rigidBody == null ? void 0 : rigidBody.setTranslation(translation, true);
-      });
-    }
-  }
-  setAnimationsPercent() {
-    if (!this.properties.autoAnimate) {
-      this.model.animationManager.animations.forEach((animation) => {
-        const action = animation.action;
-        const totalDuration = action.getClip().duration;
-        const time = totalDuration * this.properties.animationsPercent / 100;
-        action.time = time;
-      });
-      const mixer = this.model.animationManager.mixer;
-      mixer.update(0);
-    }
-  }
-  blendAnimations() {
-    const animations = this.model.animationManager.animations;
-    const blends = this.getBlends();
-    const length = blends.length;
-    const blend = this.properties.blendingPercent / 100 * (length - 1);
-    const blendIndex = Math.floor(blend);
-    const blendFrac = blend - blendIndex;
-    blends.forEach((animationIndex, index) => {
-      const action = animations[animationIndex].action;
-      let weight = this.properties.animations[animationIndex];
-      if (index === blendIndex) {
-        weight += 1 - blendFrac;
-      } else if (index === blendIndex + 1) {
-        weight += blendFrac;
-      }
-      action.setEffectiveWeight(weight);
-    });
-    animations.forEach((animation, index) => {
-      if (!blends.includes(index))
-        animation.action.setEffectiveWeight(this.properties.animations[index]);
-    });
-  }
-  setAnimationWeight(index) {
-    if (this.isValidIndex(index)) {
-      const action = this.model.animationManager.animations[index].action;
-      const weight = this.properties.animations[index];
-      action.setEffectiveWeight(weight);
-    }
-  }
-  setAnimationSpeed() {
-    var _a;
-    if ((_a = this.model) == null ? void 0 : _a.animationManager) {
-      this.model.animationManager.animations.forEach((animation) => {
-        animation.action.timeScale = this.properties.animationsSpeed;
-      });
-    }
-  }
-  getBlends() {
-    const actions = [];
-    this.properties.blends.forEach((action) => {
-      if (this.isValidIndex(action)) {
-        actions.push(action);
-      }
-    });
-    return actions;
-  }
-  setMorphsInfluence(index) {
-    var _a;
-    const slots = (_a = this.model) == null ? void 0 : _a.slots;
-    if (slots) {
-      slots.forEach((slot) => {
-        var _a2;
-        if ((_a2 = slot.morphTargets) == null ? void 0 : _a2.find((morphTarget) => morphTarget.index === index)) {
-          slot.mesh.morphTargetInfluences[index] = this.properties.morphs[index];
-        }
-      });
-    }
-  }
-  isValidIndex(index) {
-    var _a;
-    return !!((_a = this.model) == null ? void 0 : _a.animationManager.animations[index]);
+    this.importedModel.setModel(gltf);
+    this.importedModel.blendAnimations(this.properties.blends, this.properties.animations, this.properties.blendingPercent);
+    this.importedModel.setPhysics(this.properties.active);
+    this.importedModel.setVisibility(this.properties.visible);
+    this.importedModel.setCustomMaterial(this.properties.customMaterial);
+    this.importedModel.setorigin(this.properties.origin);
+    this.importedModel.showSkeleton(this.properties.skeleton);
   }
 }
 class Model extends DigoAssetThree {
@@ -6199,7 +6245,6 @@ class Model extends DigoAssetThree {
     const rapierWorld = (_b = Helper.getGlobal()) == null ? void 0 : _b.getRapierWorld();
     const rapierInstance = (_c = Helper.getGlobal()) == null ? void 0 : _c.getRapierInstance();
     RAPIER_UTILS = new RapierUtils(scene, rapierWorld, rapierInstance);
-    MODEL_UTILS = new ModelUtils(RAPIER_UTILS);
     this.setLabels(labels);
     const generalData = new GeneralData();
     generalData.container = new Scene();
@@ -6212,13 +6257,11 @@ class Model extends DigoAssetThree {
   }
   createEntity(id) {
     const entityData = new EntityData();
-    const component = entityData.container;
-    entityData.component = component;
+    entityData.component = entityData.importedModel;
     this.addEntity(id, entityData);
-    this.getContainer().add(component);
+    this.getContainer().add(entityData.component);
   }
   addProperties() {
-    this.addGeneralProperties();
     this.addMeshProperties();
     this.addPhysicsProperties();
     this.addAnimationsProperties();
@@ -6228,41 +6271,32 @@ class Model extends DigoAssetThree {
     DEFAULTS.morphs.forEach((_2, index) => {
     });
   }
-  addGeneralProperties() {
-    this.addPropertyBoolean(GENERAL_PROPERTY, "debug", true).setter((data, value) => {
-      if (RAPIER_UTILS) {
-        RAPIER_UTILS.enabled = value;
-      }
-    }).getter((data) => {
-      return RAPIER_UTILS.enabled ?? false;
-    });
-  }
   addMeshProperties() {
     this.addPropertyObject3D(ENTITY_PROPERTY, "geometry").group("mesh").setter((data, value) => {
       this.updateGeometry(data, value);
     }).getter((data) => data.properties.objectId);
     this.addPropertyBoolean(ENTITY_PROPERTY, "customMaterial", DEFAULTS.customMaterial).group("mesh").setter((data, value) => {
       data.properties.customMaterial = value;
-      data.setCustomMaterial(value);
+      data.importedModel.setCustomMaterial(value);
     }).getter((data) => data.properties.customMaterial);
     this.addPropertyMaterial(ENTITY_PROPERTY, "material", DEFAULTS.material).group("mesh").setter((data, value, property) => {
-      this.updateMaterial(data, data.properties, "material", property, value);
+      this.updateMaterial(data.importedModel, data.properties, "material", property, value);
     }).getter((data) => data.properties.material);
     this.addPropertyBoolean(ENTITY_PROPERTY, "visible", DEFAULTS.visible).group("mesh").setter((data, value) => {
       data.properties.visible = value;
-      data.setVisibility(value);
+      data.importedModel.setVisibility(value);
     }).getter((data) => data.properties.visible);
     this.addPropertyXYZ(ENTITY_PROPERTY, "origin", true, DEFAULTS.origin.x, DEFAULTS.origin.y, DEFAULTS.origin.z).group("mesh").setter((data, value) => {
       data.properties.origin = value;
-      data.setorigin(value);
+      data.importedModel.setorigin(value);
     }).getter((data) => data.properties.origin);
   }
   addAnimationsProperties() {
     DEFAULTS.animations.forEach((_2, index) => {
       this.addPropertyNumber(ENTITY_PROPERTY, `Animation ${index}`, 0, 1, 2, 0.01, DEFAULTS.animations[index]).group("animations").setter((data, value) => {
         data.properties.animations[index] = value;
-        data.setAnimationWeight(index);
-        data.blendAnimations();
+        data.importedModel.setAnimationWeight(index, value);
+        data.importedModel.blendAnimations(data.properties.blends, data.properties.animations, data.properties.blendingPercent);
       }).getter((data) => data.properties.animations[index]);
     });
   }
@@ -6270,82 +6304,76 @@ class Model extends DigoAssetThree {
     DEFAULTS.morphs.forEach((_2, index) => {
       this.addPropertyNumber(ENTITY_PROPERTY, `Morph ${index}`, 0, 1, 2, 0.01, DEFAULTS.morphs[index]).group("morphs").setter((data, value) => {
         data.properties.morphs[index] = value;
-        data.setMorphsInfluence(index);
+        data.importedModel.setMorphInfluence(index, value);
       }).getter((data) => data.properties.morphs[index]);
     });
   }
   addBlendingProperties() {
     this.addPropertyNumber(ENTITY_PROPERTY, "blendingPercent", 0, 100, 2, 0.01, DEFAULTS.blendingPercent).group("blending").setter((data, value) => {
       data.properties.blendingPercent = value;
-      data.blendAnimations();
+      data.importedModel.blendAnimations(data.properties.blends, data.properties.animations, data.properties.blendingPercent);
     }).getter((data) => data.properties.blendingPercent);
     DEFAULTS.blends.forEach((_2, index) => {
       this.addPropertyNumber(ENTITY_PROPERTY, `Blend ${index}`, -1, 9, 0, 1, DEFAULTS.blends[index]).group("blending").setter((data, value) => {
         data.properties.blends[index] = value;
-        data.blendAnimations();
+        data.importedModel.blendAnimations(data.properties.blends, data.properties.animations, data.properties.blendingPercent);
       }).getter((data) => data.properties.blends[index]);
     });
   }
   addAnimationsControlProperties() {
     this.addPropertyNumber(ENTITY_PROPERTY, "animationsSpeed", 0, 10, 2, 0.01, DEFAULTS.animationsSpeed).group("animationsControl").setter((data, value) => {
       data.properties.animationsSpeed = value;
-      data.setAnimationSpeed();
+      data.importedModel.setAnimationsSpeed(value);
     }).getter((data) => data.properties.animationsSpeed);
     this.addPropertyBoolean(ENTITY_PROPERTY, "autoAnimate", DEFAULTS.autoAnimate).group("animationsControl").setter((data, value) => {
       data.properties.autoAnimate = value;
       if (!value) {
-        data.setAnimationsPercent();
+        data.importedModel.setManualTime(data.properties.animationsPercent);
       }
     }).getter((data) => data.properties.autoAnimate);
     this.addPropertyNumber(ENTITY_PROPERTY, "animationsPercent", 0, 100, 2, 0.01, DEFAULTS.animationsPercent).group("animationsControl").setter((data, value) => {
       data.properties.animationsPercent = value;
-      data.setAnimationsPercent();
+      if (!data.properties.autoAnimate) {
+        data.importedModel.setManualTime(value);
+      }
     }).getter((data) => data.properties.animationsPercent);
     this.addPropertyBoolean(ENTITY_PROPERTY, "skeleton", DEFAULTS.skeleton).group("animationsControl").setter((data, value) => {
       data.properties.skeleton = value;
-      if (data.skeleton) {
-        data.skeleton.visible = value;
-      }
+      data.importedModel.showSkeleton(value);
     }).getter((data) => data.properties.skeleton);
   }
   addPhysicsProperties() {
     this.addPropertyBoolean(ENTITY_PROPERTY, "active", DEFAULTS.active).group("physics").setter((data, value) => {
       data.properties.active = value;
-      data.setPhysics(value);
+      data.importedModel.setPhysics(value);
     }).getter((data) => data.properties.active);
     this.addPropertyNumber(ENTITY_PROPERTY, "friction", 0, 10, 2, 0.01, DEFAULTS.friction).group("physics").setter((data, value) => {
       data.properties.friction = value;
-      data.setPhysicsProperties();
+      data.importedModel.setPhysicsFriction(value);
     }).getter((data) => data.properties.friction);
     this.addPropertyNumber(ENTITY_PROPERTY, "restitution", 0, 10, 2, 0.01, DEFAULTS.restitution).group("physics").setter((data, value) => {
       data.properties.restitution = value;
-      data.setPhysicsProperties();
+      data.importedModel.setPhysicsRestitution(value);
     }).getter((data) => data.properties.restitution);
   }
   updateGeometry(data, id) {
     this.loadGLTF(id, (gltf) => {
-      data.setModel(gltf);
+      data.updateModel(gltf);
     });
     data.properties.objectId = id;
   }
   tick(parameters) {
     this.deltaTime = parameters.elapsedTime - this.previousTime;
     this.previousTime = parameters.elapsedTime;
-    this.getEntities().forEach(
-      (entityName) => {
-        const entityData = this.getEntity(entityName);
-        const properties = entityData.properties;
-        const model = entityData.model;
-        if (properties.autoAnimate && (model == null ? void 0 : model.animationManager)) {
-          model.animationManager.mixer.update(this.deltaTime);
-        }
-        entityData.updateTransformPhysics();
-      }
-    );
+    this.getEntities().forEach((entityName) => {
+      const entityData = this.getEntity(entityName);
+      const autoAnimate = entityData.properties.autoAnimate;
+      const scale = entityData.importedModel.scale;
+      const updateScale = !scale.equals(entityData.previousScale);
+      entityData.previousScale.set(scale.x, scale.y, scale.z);
+      entityData.importedModel.tick(autoAnimate, entityData.properties.active, updateScale, this.deltaTime);
+    });
     super.tick(parameters);
-    if (RAPIER_UTILS) {
-      RAPIER_UTILS.updateDebug();
-    }
   }
 }
 const digoAssetData = {

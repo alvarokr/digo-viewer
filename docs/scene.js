@@ -1,4 +1,4 @@
-import { B as BufferGeometry, a as BufferAttribute, L as LineSegments, b as LineBasicMaterial, c as BoxGeometry, S as SphereGeometry, I as IcosahedronGeometry, V as Vector3, Q as Quaternion, E as Euler, d as Scene, M as Material, e as Mesh, f as Matrix4, g as InstancedMesh, h as MeshPhysicalMaterial, D as DynamicDrawUsage, i as MathUtils } from "./three.js";
+import { L as LineSegments, B as BufferGeometry, a as LineBasicMaterial, b as BufferAttribute, c as BoxGeometry, S as SphereGeometry, I as IcosahedronGeometry, V as Vector3, Q as Quaternion, E as Euler, d as Scene, C as Color, N as NoToneMapping, e as LinearToneMapping, R as ReinhardToneMapping, f as CineonToneMapping, A as ACESFilmicToneMapping, g as AgXToneMapping, h as CustomToneMapping, i as BasicShadowMap, P as PCFShadowMap, j as PCFSoftShadowMap, D as DataTexture, k as AmbientLight, l as EquirectangularReflectionMapping, F as FogExp2 } from "./three.js";
 (function polyfill() {
   const relList = document.createElement("link").relList;
   if (relList && relList.supports && relList.supports("modulepreload")) {
@@ -115,7 +115,7 @@ class Helper {
     }
   }
 }
-const ENTITY_PROPERTY = false;
+const GENERAL_PROPERTY = true;
 var AssetPropertyId = /* @__PURE__ */ ((AssetPropertyId2) => {
   AssetPropertyId2["POSITION"] = "position";
   AssetPropertyId2["SCALE"] = "scale";
@@ -127,8 +127,6 @@ var AssetPropertyId = /* @__PURE__ */ ((AssetPropertyId2) => {
   return AssetPropertyId2;
 })(AssetPropertyId || {});
 class AssetGeneralData {
-}
-class AssetEntityData {
 }
 class AssetPropertyClass {
   constructor(definition) {
@@ -674,161 +672,6 @@ class DigoAssetThree extends Asset {
   }
   tick(parameters) {
   }
-}
-function mergeGeometries(geometries, useGroups = false) {
-  const isIndexed = geometries[0].index !== null;
-  const attributesUsed = new Set(Object.keys(geometries[0].attributes));
-  const morphAttributesUsed = new Set(Object.keys(geometries[0].morphAttributes));
-  const attributes = {};
-  const morphAttributes = {};
-  const morphTargetsRelative = geometries[0].morphTargetsRelative;
-  const mergedGeometry = new BufferGeometry();
-  let offset = 0;
-  for (let i2 = 0; i2 < geometries.length; ++i2) {
-    const geometry = geometries[i2];
-    let attributesCount = 0;
-    if (isIndexed !== (geometry.index !== null)) {
-      console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index " + i2 + ". All geometries must have compatible attributes; make sure index attribute exists among all geometries, or in none of them.");
-      return null;
-    }
-    for (const name in geometry.attributes) {
-      if (!attributesUsed.has(name)) {
-        console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index " + i2 + '. All geometries must have compatible attributes; make sure "' + name + '" attribute exists among all geometries, or in none of them.');
-        return null;
-      }
-      if (attributes[name] === void 0)
-        attributes[name] = [];
-      attributes[name].push(geometry.attributes[name]);
-      attributesCount++;
-    }
-    if (attributesCount !== attributesUsed.size) {
-      console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index " + i2 + ". Make sure all geometries have the same number of attributes.");
-      return null;
-    }
-    if (morphTargetsRelative !== geometry.morphTargetsRelative) {
-      console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index " + i2 + ". .morphTargetsRelative must be consistent throughout all geometries.");
-      return null;
-    }
-    for (const name in geometry.morphAttributes) {
-      if (!morphAttributesUsed.has(name)) {
-        console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index " + i2 + ".  .morphAttributes must be consistent throughout all geometries.");
-        return null;
-      }
-      if (morphAttributes[name] === void 0)
-        morphAttributes[name] = [];
-      morphAttributes[name].push(geometry.morphAttributes[name]);
-    }
-    if (useGroups) {
-      let count;
-      if (isIndexed) {
-        count = geometry.index.count;
-      } else if (geometry.attributes.position !== void 0) {
-        count = geometry.attributes.position.count;
-      } else {
-        console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index " + i2 + ". The geometry must have either an index or a position attribute");
-        return null;
-      }
-      mergedGeometry.addGroup(offset, count, i2);
-      offset += count;
-    }
-  }
-  if (isIndexed) {
-    let indexOffset = 0;
-    const mergedIndex = [];
-    for (let i2 = 0; i2 < geometries.length; ++i2) {
-      const index = geometries[i2].index;
-      for (let j2 = 0; j2 < index.count; ++j2) {
-        mergedIndex.push(index.getX(j2) + indexOffset);
-      }
-      indexOffset += geometries[i2].attributes.position.count;
-    }
-    mergedGeometry.setIndex(mergedIndex);
-  }
-  for (const name in attributes) {
-    const mergedAttribute = mergeAttributes(attributes[name]);
-    if (!mergedAttribute) {
-      console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed while trying to merge the " + name + " attribute.");
-      return null;
-    }
-    mergedGeometry.setAttribute(name, mergedAttribute);
-  }
-  for (const name in morphAttributes) {
-    const numMorphTargets = morphAttributes[name][0].length;
-    if (numMorphTargets === 0)
-      break;
-    mergedGeometry.morphAttributes = mergedGeometry.morphAttributes || {};
-    mergedGeometry.morphAttributes[name] = [];
-    for (let i2 = 0; i2 < numMorphTargets; ++i2) {
-      const morphAttributesToMerge = [];
-      for (let j2 = 0; j2 < morphAttributes[name].length; ++j2) {
-        morphAttributesToMerge.push(morphAttributes[name][j2][i2]);
-      }
-      const mergedMorphAttribute = mergeAttributes(morphAttributesToMerge);
-      if (!mergedMorphAttribute) {
-        console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed while trying to merge the " + name + " morphAttribute.");
-        return null;
-      }
-      mergedGeometry.morphAttributes[name].push(mergedMorphAttribute);
-    }
-  }
-  return mergedGeometry;
-}
-function mergeAttributes(attributes) {
-  let TypedArray;
-  let itemSize;
-  let normalized;
-  let gpuType = -1;
-  let arrayLength = 0;
-  for (let i2 = 0; i2 < attributes.length; ++i2) {
-    const attribute = attributes[i2];
-    if (TypedArray === void 0)
-      TypedArray = attribute.array.constructor;
-    if (TypedArray !== attribute.array.constructor) {
-      console.error("THREE.BufferGeometryUtils: .mergeAttributes() failed. BufferAttribute.array must be of consistent array types across matching attributes.");
-      return null;
-    }
-    if (itemSize === void 0)
-      itemSize = attribute.itemSize;
-    if (itemSize !== attribute.itemSize) {
-      console.error("THREE.BufferGeometryUtils: .mergeAttributes() failed. BufferAttribute.itemSize must be consistent across matching attributes.");
-      return null;
-    }
-    if (normalized === void 0)
-      normalized = attribute.normalized;
-    if (normalized !== attribute.normalized) {
-      console.error("THREE.BufferGeometryUtils: .mergeAttributes() failed. BufferAttribute.normalized must be consistent across matching attributes.");
-      return null;
-    }
-    if (gpuType === -1)
-      gpuType = attribute.gpuType;
-    if (gpuType !== attribute.gpuType) {
-      console.error("THREE.BufferGeometryUtils: .mergeAttributes() failed. BufferAttribute.gpuType must be consistent across matching attributes.");
-      return null;
-    }
-    arrayLength += attribute.count * itemSize;
-  }
-  const array = new TypedArray(arrayLength);
-  const result = new BufferAttribute(array, itemSize, normalized);
-  let offset = 0;
-  for (let i2 = 0; i2 < attributes.length; ++i2) {
-    const attribute = attributes[i2];
-    if (attribute.isInterleavedBufferAttribute) {
-      const tupleOffset = offset / itemSize;
-      for (let j2 = 0, l2 = attribute.count; j2 < l2; j2++) {
-        for (let c2 = 0; c2 < itemSize; c2++) {
-          const value = attribute.getComponent(j2, c2);
-          result.setComponent(j2 + tupleOffset, c2, value);
-        }
-      }
-    } else {
-      array.set(attribute.array, offset);
-    }
-    offset += attribute.count * itemSize;
-  }
-  if (gpuType !== void 0) {
-    result.gpuType = gpuType;
-  }
-  return result;
 }
 let A;
 const I = new Array(128).fill(void 0);
@@ -5945,507 +5788,633 @@ class RapierUtils {
     return finalPostion;
   }
 }
+function convertToRadians(degrees) {
+  const radians = degrees * (Math.PI / 180);
+  return radians;
+}
 const labels = {
-  angularDamping: {
-    en: "Angular Damping",
-    es: "Amortiguación Angular"
+  ambientLight: {
+    en: "Ambient Light",
+    es: "Luz Ambiental"
   },
-  angularInertia: {
-    en: "Angular Inertia",
-    es: "Inercia Angular"
+  ambientColor: {
+    en: "Color",
+    es: "Color"
   },
-  angularImpulse: {
-    en: "Angular Impulse",
-    es: "Impulso Angular"
+  ambientIntensity: {
+    en: "Intensity",
+    es: "Intensidad"
   },
-  attractor: {
-    en: "Attractor",
-    es: "Atractor"
+  autoRotate: {
+    en: "Auto Rotate",
+    es: "Rotación Automática"
   },
-  attractorPosition: {
-    en: "Position",
-    es: "Posición"
+  autoRotateSpeed: {
+    en: " Speed",
+    es: "Velocidad"
   },
-  attractorForce: {
-    en: "Force",
-    es: "Fuerza"
+  background: {
+    en: "Background",
+    es: "Fondo"
   },
-  bounciness: {
-    en: "Bounciness",
-    es: "Rebote"
+  backgroundColor: {
+    en: "Color",
+    es: "Color"
   },
-  centerOfGravity: {
-    en: "Center of Gravity",
-    es: "Centro de Gravedad"
+  backgroundBlurriness: {
+    en: "Blurriness",
+    es: "Desenfoque"
   },
-  count: {
-    en: "Count",
-    es: "Cuenta"
+  backgroundIntensity: {
+    en: "Intensity",
+    es: "Intensidad"
   },
-  debug: {
+  camera: {
+    en: "Camera",
+    es: "Cámara"
+  },
+  cameraFar: {
+    en: "Far",
+    es: "Lejos"
+  },
+  cameraFov: {
+    en: "FOV",
+    es: "FOV"
+  },
+  cameraLookAt: {
+    en: "Look At",
+    es: "Mira A"
+  },
+  cameraNear: {
+    en: "Near",
+    es: "Cerca"
+  },
+  cameraZoom: {
+    en: "Zoom",
+    es: "Zoom"
+  },
+  control: {
+    en: "Control",
+    es: "Control"
+  },
+  damping: {
+    en: "Damping",
+    es: "Amortiguación"
+  },
+  dampingFactor: {
+    en: "Factor",
+    es: "Factor"
+  },
+  debugPhysics: {
     en: "Debug",
     es: "Debug"
   },
-  fadeTime: {
-    en: "Fade Time",
-    es: "Tiempo Desaparición"
+  enableControl: {
+    en: "Enable",
+    es: "Habilitar"
   },
-  forces: {
-    en: "Forces",
-    es: "Fuerzas"
+  enablePhysics: {
+    en: "Enable",
+    es: "Habilitar"
   },
-  friction: {
-    en: "Friction",
-    es: "Fricción"
+  enableShadowMap: {
+    en: "Enable",
+    es: "Habilitar"
+  },
+  environment: {
+    en: "Environment",
+    es: "Entorno"
+  },
+  fog: {
+    en: "Fog",
+    es: "Niebla"
+  },
+  fogColor: {
+    en: "Color",
+    es: "Color"
+  },
+  fogDensity: {
+    en: "Density",
+    es: "Densidad"
   },
   gravity: {
     en: "Gravity",
     es: "Gravedad"
   },
-  geometry: {
-    en: "Geometry",
-    es: "Geometría"
+  limitAzimuth: {
+    en: "Horizontal Orbit",
+    es: "Ángulo Horizontal"
   },
-  lifeTime: {
-    en: "Life Time (s)",
-    es: "Ciclo de vida (s)"
+  limitDistance: {
+    en: "Distance",
+    es: "Distancia"
   },
-  linearDamping: {
-    en: "Linear Damping",
-    es: "Amortiguación Linear"
+  limitPolar: {
+    en: "Vertical Orbit",
+    es: "Ángulo Vertical"
   },
-  linearImpulse: {
-    en: "Linear Impulse",
-    es: "Impulso Linear"
+  limits: {
+    en: "Limits",
+    es: "Límites"
   },
-  mass: {
-    en: "Mass",
-    es: "Peso"
+  cubeMap: {
+    en: "CubeMap",
+    es: "HDRI"
   },
-  material: {
-    en: "Material",
-    es: "Material"
+  maxAzimuthAngle: {
+    en: "End",
+    es: "Final"
   },
-  mesh: {
-    en: "Mesh",
-    es: "Objeto"
+  maxDistance: {
+    en: "End",
+    es: "Final"
+  },
+  maxPolarAngle: {
+    en: "End",
+    es: "Final"
+  },
+  minAzimuthAngle: {
+    en: "Start",
+    es: "Comienzo"
+  },
+  minDistance: {
+    en: "Start",
+    es: "Comienzo"
+  },
+  minPolarAngle: {
+    en: "Start",
+    es: "Comienzo"
+  },
+  pan: {
+    en: "Pan",
+    es: "Panorámica"
+  },
+  panSpeed: {
+    en: "Speed",
+    es: "Velocidad"
   },
   physics: {
     en: "Physics",
-    es: "Físicas"
+    es: "Física"
   },
-  restitution: {
-    en: "Bouncinness",
-    es: "Rebote"
+  renderer: {
+    en: "Renderer",
+    es: "Renderizador"
   },
-  size: {
-    en: "Size",
-    es: "Tamaño"
+  rotate: {
+    en: "Rotate",
+    es: "Rotar"
   },
-  thrower: {
-    en: "Thrower",
-    es: "Disparador"
+  rotateSpeed: {
+    en: "Speed",
+    es: "Velocidad"
   },
-  throwTime: {
-    en: "Throw Time",
-    es: "Tiempo de disparo"
+  shadowMap: {
+    en: "Shadow Map",
+    es: "Mapa de Sombras"
   },
-  trigger: {
-    en: "Trigger",
-    es: "Trigger"
+  shadowMapType: {
+    en: "Type",
+    es: "Tipo"
   },
-  spawn: {
-    en: "Spawn",
-    es: "Disparo"
+  toneMapping: {
+    en: "Tone Mapping",
+    es: "Mapeo de Tonos"
   },
-  spawnPosition: {
-    en: "Position",
-    es: "Posición"
+  toneMappingExposure: {
+    en: "Exposure",
+    es: "Exposición de Mapeo de Tonos"
   },
-  spawnRandomness: {
-    en: "Randomness",
-    es: "Aleatoriedad"
+  transparentBackground: {
+    en: "Transparent",
+    es: "Transparente"
+  },
+  useBackgroundColor: {
+    en: "As background",
+    es: "Color de Fondo"
+  },
+  useMap: {
+    en: "Use Map",
+    es: "Usar Mapa"
+  },
+  zoom: {
+    en: "Zoom",
+    es: "Zoom"
+  },
+  zoomSpeed: {
+    en: "Speed",
+    es: "Zoom"
+  },
+  zoomToCursor: {
+    en: "To Cursor",
+    es: "Al Cursor"
   }
 };
-let RAPIER_UTILS;
+const toneMappingOptions = {
+  None: NoToneMapping,
+  Linear: LinearToneMapping,
+  Reinhard: ReinhardToneMapping,
+  Cineon: CineonToneMapping,
+  ACESFilmic: ACESFilmicToneMapping,
+  AgX: AgXToneMapping,
+  Custom: CustomToneMapping
+};
+const TONE_MAP_KEYS = Object.keys(toneMappingOptions);
+const shadowMapTypes = {
+  BasicShadowMap,
+  PCFShadowMap,
+  PCFSoftShadowMap
+};
+const SHADOW_MAP_TYPES_KEYS = Object.keys(shadowMapTypes);
 const DEFAULTS = {
-  maxCount: 1e3,
-  customMaterial: false,
-  material: { digoType: "physical", color: 16777215 },
-  objectId: "",
-  spawnPosition: new Vector3(0, 2, 0),
-  spawnRandomness: new Vector3(0.5, 0.5, 0.5),
-  count: 100,
-  lifeTime: 10,
-  throwTime: 10,
-  fadeTime: 0.5,
-  trigger: 1,
-  size: 1,
-  mass: 1,
-  angularInertia: 0.4,
-  angularInertiaMultiplier: 10,
-  linearDamping: 0,
-  angularDamping: 0,
-  restitution: 0.2,
-  friction: 0.5,
-  attractorPosition: new Vector3(0, 0, 0),
-  attractorForce: 0,
-  linearImpulse: new Vector3(0, 0, 0),
-  angularImpulse: new Vector3(0, 0, 0)
+  toneMapping: TONE_MAP_KEYS[0],
+  toneMappingExposure: 1,
+  backgroundColor: 16777215,
+  useMap: true,
+  backgroundBlurriness: 0,
+  backgroundIntensity: 1,
+  useBackgroundColor: true,
+  fogColor: 16777215,
+  fogDensity: 1e-3,
+  transparentBackground: false,
+  cameraFov: 45,
+  cameraNear: 0.1,
+  cameraFar: 100,
+  cameraZoom: 1,
+  cameraLookAt: { x: 0, y: 0, z: 0 },
+  enableControl: false,
+  rotate: true,
+  rotateSpeed: 1,
+  autoRotate: false,
+  autoRotateSpeed: 2,
+  pan: true,
+  panSpeed: 1,
+  zoom: true,
+  zoomSpeed: 1,
+  zoomToCursor: false,
+  damping: true,
+  dampingFactor: 0.25,
+  limitPolar: false,
+  minPolarAngle: 0,
+  maxPolarAngle: 180,
+  limitAzimuth: false,
+  minAzimuthAngle: -180,
+  maxAzimuthAngle: 180,
+  limitDistance: false,
+  minDistance: 1,
+  maxDistance: 10,
+  ambientColor: 16777215,
+  ambientIntensity: 1,
+  enablePhysics: true,
+  gravity: { x: 0, y: -0.98, z: 0 },
+  debugPhysics: false,
+  enableShadowMap: true,
+  shadowMapType: SHADOW_MAP_TYPES_KEYS[2]
 };
 class GeneralData extends AssetGeneralData {
-}
-class EntityData extends AssetEntityData {
   constructor() {
+    var _a, _b, _c, _d, _e, _f;
     super();
     this.properties = {
-      objectId: DEFAULTS.objectId,
-      material: { digoType: "physical", color: 16777215 },
-      customMaterial: DEFAULTS.customMaterial,
-      spawnPosition: DEFAULTS.spawnPosition,
-      spawnRandomness: DEFAULTS.spawnRandomness,
-      count: DEFAULTS.count,
-      lifeTime: DEFAULTS.lifeTime,
-      throwTime: DEFAULTS.throwTime,
-      fadeTime: DEFAULTS.fadeTime,
-      trigger: DEFAULTS.trigger,
-      size: DEFAULTS.size,
-      mass: DEFAULTS.mass,
-      angularInertia: DEFAULTS.angularInertia,
-      linearDamping: DEFAULTS.linearDamping,
-      angularDamping: DEFAULTS.angularDamping,
-      restitution: DEFAULTS.restitution,
-      friction: DEFAULTS.friction,
-      angularImpulse: DEFAULTS.angularImpulse,
-      linearImpulse: DEFAULTS.linearImpulse,
-      attractorPosition: DEFAULTS.attractorPosition,
-      attractorForce: DEFAULTS.attractorForce
-    };
-    this.instancedMesh = new InstancedMesh(
-      new BoxGeometry(0.05, 0.05, 0.05),
-      new MeshPhysicalMaterial({ name: `${Math.random()}` }),
-      DEFAULTS.maxCount
-    );
-    this.originalMaterial = new Material();
-    this.material = new MeshPhysicalMaterial({ name: `${Math.random()}` });
-    this.instances = [];
-    this.throwerProperties = {
-      previousTrigger: 0,
-      lastActive: 0
-    };
-    this.setInstancedMesh();
-  }
-  createInstance() {
-    return {
-      physics: {},
-      properties: {
-        lifeTime: 0,
-        throwTime: 0,
-        state: 0
-        /* sleeping */
+      environment: {
+        cubeMapId: "",
+        cubeMap: new DataTexture()
+      },
+      renderer: {
+        toneMapping: DEFAULTS.toneMapping,
+        toneMappingExposure: DEFAULTS.toneMappingExposure
+      },
+      background: {
+        color: new Color(DEFAULTS.backgroundColor),
+        blurriness: DEFAULTS.backgroundBlurriness,
+        intensity: DEFAULTS.backgroundIntensity,
+        useMap: DEFAULTS.useMap,
+        transparent: DEFAULTS.transparentBackground
+      },
+      fog: {
+        color: new Color(DEFAULTS.fogColor),
+        density: DEFAULTS.fogDensity,
+        useBackgroundColor: DEFAULTS.useBackgroundColor
+      },
+      camera: {
+        fov: DEFAULTS.cameraFov,
+        near: DEFAULTS.cameraNear,
+        far: DEFAULTS.cameraFar,
+        zoom: DEFAULTS.cameraZoom,
+        lookAt: new Vector3().copy(DEFAULTS.cameraLookAt)
+      },
+      controls: {
+        general: {
+          rotate: DEFAULTS.rotate,
+          rotateSpeed: DEFAULTS.rotateSpeed,
+          autoRotate: DEFAULTS.autoRotate,
+          autoRotateSpeed: DEFAULTS.autoRotateSpeed,
+          pan: DEFAULTS.pan,
+          panSpeed: DEFAULTS.panSpeed,
+          zoom: DEFAULTS.zoom,
+          zoomSpeed: DEFAULTS.zoomSpeed,
+          zoomToCursor: DEFAULTS.zoomToCursor,
+          damping: DEFAULTS.damping,
+          dampingFactor: DEFAULTS.dampingFactor
+        },
+        limits: {
+          limitPolar: DEFAULTS.limitPolar,
+          minPolarAngle: DEFAULTS.minPolarAngle,
+          maxPolarAngle: DEFAULTS.maxPolarAngle,
+          limitAzimuth: DEFAULTS.limitAzimuth,
+          minAzimuthAngle: DEFAULTS.minAzimuthAngle,
+          maxAzimuthAngle: DEFAULTS.maxAzimuthAngle,
+          limitDistance: DEFAULTS.limitDistance,
+          minDistance: DEFAULTS.minDistance,
+          maxDistance: DEFAULTS.maxDistance
+        }
+      },
+      ambientLight: {
+        ligth: new AmbientLight(DEFAULTS.ambientColor, DEFAULTS.ambientIntensity),
+        color: new Color(DEFAULTS.ambientColor),
+        intensity: DEFAULTS.ambientIntensity
+      },
+      physics: {
+        enable: DEFAULTS.enablePhysics,
+        gravity: new Vector3().copy(DEFAULTS.gravity),
+        debug: DEFAULTS.debugPhysics
+      },
+      shadowMap: {
+        enable: DEFAULTS.enableShadowMap,
+        type: DEFAULTS.shadowMapType
       }
     };
+    this.scene = (_a = Helper.getGlobal()) == null ? void 0 : _a.getThreeScene();
+    this.camera = (_b = Helper.getGlobal()) == null ? void 0 : _b.getThreeCamera();
+    this.renderer = (_c = Helper.getGlobal()) == null ? void 0 : _c.getThreeWebGLRenderer();
+    this.orbitControls = (_d = Helper.getGlobal()) == null ? void 0 : _d.getThreeOrbitControls();
+    const world = (_e = Helper.getGlobal()) == null ? void 0 : _e.getRapierWorld();
+    const rapierInstance = (_f = Helper.getGlobal()) == null ? void 0 : _f.getRapierInstance();
+    this.rapierUtils = new RapierUtils(this.scene, world, rapierInstance);
   }
-  setInstancedMesh() {
-    const positionMatrix = new Matrix4();
-    const position = new Vector3();
-    const quaternion = new Quaternion();
-    const scale = new Vector3();
-    for (let i2 = 0; i2 < this.instancedMesh.count; i2++) {
-      const startPosition = RAPIER_UTILS.getRandomPosition(DEFAULTS.spawnPosition, DEFAULTS.spawnRandomness);
-      positionMatrix.setPosition(startPosition);
-      positionMatrix.decompose(position, quaternion, scale);
-      scale.set(0, 0, 0);
-      positionMatrix.compose(position, quaternion, scale);
-      this.instancedMesh.setMatrixAt(i2, positionMatrix);
-      const instance = this.createInstance();
-      this.instances.push(instance);
-    }
-    this.instancedMesh.instanceMatrix.setUsage(DynamicDrawUsage);
-    this.instancedMesh.castShadow = true;
-    this.instancedMesh.receiveShadow = true;
-    this.instancedMesh.geometry.computeBoundingSphere();
-    this.instancedMesh.geometry.computeBoundingBox();
+  setEnvironmentMap() {
+    var _a;
+    (_a = Helper.getGlobal()) == null ? void 0 : _a.loadRGBE(this.properties.environment.cubeMapId, (rgbe) => {
+      this.properties.environment.cubeMap = rgbe;
+      rgbe.mapping = EquirectangularReflectionMapping;
+      this.scene.environment = this.properties.environment.cubeMap;
+    });
   }
-  setCustomMaterial(customMaterial) {
-    this.instancedMesh.material = customMaterial ? this.material : this.originalMaterial;
-  }
-  throwInstance(index) {
-    const instance = this.instances[index];
-    instance.physics = RAPIER_UTILS.addInstancePhysics(this.instancedMesh, index);
-    const translation = RAPIER_UTILS.getRandomPosition(this.properties.spawnPosition, this.properties.spawnRandomness);
-    const rigidBody = instance.physics.rigidBody;
-    this.setPhysicsProperties(instance);
-    rigidBody.setTranslation(translation, true);
-    const rotation = new Vector3(
-      Math.random() * Math.PI * 2,
-      Math.random() * Math.PI * 2,
-      Math.random() * Math.PI * 2
-    );
-    RAPIER_UTILS.setRigidBodyRotation(rigidBody, rotation);
-    instance.properties.lifeTime = 0;
-    instance.properties.throwTime = 0;
-    instance.properties.state = 2;
-    RAPIER_UTILS.applyLinearImpulse(rigidBody, this.properties.linearImpulse);
-    RAPIER_UTILS.applyAngularImpulse(rigidBody, this.properties.angularImpulse);
-  }
-  activeInstance(index, deltaTime) {
-    const instance = this.instances[index];
-    instance.properties.lifeTime += deltaTime;
-    if (instance.properties.lifeTime >= this.properties.lifeTime && this.properties.lifeTime !== 0) {
-      instance.properties.state = 3;
+  setBackground() {
+    if (this.properties.background.transparent) {
+      this.scene.background = null;
     } else {
-      this.moveInstance(instance, index);
-      RAPIER_UTILS.attractToPoint(instance.physics.rigidBody, this.properties.attractorPosition, this.properties.attractorForce);
+      this.scene.background = this.properties.background.useMap ? this.properties.environment.cubeMap : this.properties.background.color;
     }
   }
-  killInstance(index) {
-    const instance = this.instances[index];
-    this.fadeInstance(index, this.properties.fadeTime * 1e3);
-    RAPIER_UTILS.removeInstancePhysics(instance.physics);
-    instance.properties.lifeTime = 0;
-    instance.properties.throwTime = 0;
-    instance.properties.state = 0;
+  setFog() {
+    const color = this.properties.fog.useBackgroundColor ? this.properties.background.color : this.properties.fog.color;
+    this.scene.fog = new FogExp2(color, this.properties.fog.density);
   }
-  fadeInstance(index, milliseconds) {
-    const startTime = Date.now();
-    const position = new Vector3();
-    const quaternion = new Quaternion();
-    const scale = new Vector3();
-    const instanceMatrix = new Matrix4();
-    this.instancedMesh.getMatrixAt(index, instanceMatrix);
-    instanceMatrix.decompose(position, quaternion, scale);
-    const targetScale = new Vector3(0, 0, 0);
-    const intervalId = setInterval(() => {
-      const elapsedTime = Date.now() - startTime;
-      if (elapsedTime >= milliseconds) {
-        clearInterval(intervalId);
-      }
-      const progress = MathUtils.smoothstep(elapsedTime, 0, milliseconds);
-      scale.lerp(targetScale, progress);
-      const matrix = new Matrix4();
-      matrix.compose(position, quaternion, scale);
-      this.instancedMesh.setMatrixAt(index, matrix);
-      this.instancedMesh.instanceMatrix.needsUpdate = true;
-    }, 10);
+  limitPolarAngle() {
+    this.orbitControls.minPolarAngle = this.properties.controls.limits.limitPolar ? convertToRadians(this.properties.controls.limits.minPolarAngle) : -Infinity;
+    this.orbitControls.maxPolarAngle = this.properties.controls.limits.limitPolar ? convertToRadians(this.properties.controls.limits.maxPolarAngle) : Infinity;
   }
-  moveInstance(instance, index) {
-    const rigidBody = instance.physics.rigidBody;
-    const quaternion = new Quaternion();
-    const position = new Vector3();
-    const scale = new Vector3(1, 1, 1);
-    const matrix = new Matrix4();
-    const array = this.instancedMesh.instanceMatrix.array;
-    position.copy(rigidBody.translation());
-    quaternion.copy(rigidBody.rotation());
-    matrix.compose(position, quaternion, scale).toArray(array, index * 16);
+  limitAzimuthAngle() {
+    this.orbitControls.minAzimuthAngle = this.properties.controls.limits.limitAzimuth ? convertToRadians(this.properties.controls.limits.minAzimuthAngle) : -Infinity;
+    this.orbitControls.maxAzimuthAngle = this.properties.controls.limits.limitAzimuth ? convertToRadians(this.properties.controls.limits.maxAzimuthAngle) : Infinity;
   }
-  setPhysicsProperties(instance) {
-    const collider = instance.physics.collider;
-    collider.setRestitution(this.properties.restitution);
-    collider.setFriction(this.properties.friction);
-    const rigidBody = instance.physics.rigidBody;
-    const geometry = this.instancedMesh.geometry;
-    Math.sqrt(geometry.boundingSphere.radius);
-    const mass = this.properties.mass;
-    const angularInertiaValue = this.properties.angularInertia;
-    const angularInertia = new Vector3(angularInertiaValue, angularInertiaValue, angularInertiaValue);
-    const centerOfMass = geometry.boundingBox.getCenter(new Vector3());
-    const angularInertiaLocalFrame = new Bg.Quaternion(0, 0, 0, 1);
-    rigidBody.setAdditionalMassProperties(mass, centerOfMass, angularInertia, angularInertiaLocalFrame, true);
-    rigidBody.setAngularDamping(this.properties.angularDamping);
-    rigidBody.setLinearDamping(this.properties.linearDamping);
+  limitDistance() {
+    this.orbitControls.minDistance = this.properties.controls.limits.limitDistance ? this.properties.controls.limits.minDistance : -Infinity;
+    this.orbitControls.maxDistance = this.properties.controls.limits.limitDistance ? this.properties.controls.limits.maxDistance : Infinity;
   }
 }
-class Thrower extends DigoAssetThree {
-  constructor(entities) {
-    var _a, _b, _c;
+class SceneDigo extends DigoAssetThree {
+  constructor() {
     super();
-    this.previousTime = 0;
-    this.deltaTime = 0;
-    const scene = (_a = Helper.getGlobal()) == null ? void 0 : _a.getThreeScene();
-    const rapierWorld = (_b = Helper.getGlobal()) == null ? void 0 : _b.getRapierWorld();
-    const rapierInstance = (_c = Helper.getGlobal()) == null ? void 0 : _c.getRapierInstance();
-    const rapierUtils = new RapierUtils(scene, rapierWorld, rapierInstance);
-    RAPIER_UTILS = rapierUtils;
     this.setLabels(labels);
     const generalData = new GeneralData();
     generalData.container = new Scene();
     this.setGeneralData(generalData);
-    this.addDefaultProperties(true, true);
-    this.addProperties();
-    entities.forEach((entity) => {
-      this.createEntity(entity);
-    });
-  }
-  createEntity(id) {
-    const entityData = new EntityData();
-    const component = entityData.instancedMesh;
-    entityData.component = component;
-    this.addEntity(id, entityData);
-    this.getContainer().add(component);
-  }
-  addProperties() {
-    this.addMeshProperties();
-    this.addThrowerProperties();
+    generalData.container.add(generalData.properties.ambientLight.ligth);
+    this.addEnvironmentProperties();
+    this.addRendererProperties();
+    this.addPropertiesBackground();
+    this.addFogProperties();
+    this.addCameraProperties();
+    this.addControlGeneralProperties();
+    this.addControlLimitProperties();
+    this.addAmbientLightProperties();
     this.addPhysicsProperties();
-    this.addAttractorProperties();
+    this.addShadowsProperties();
   }
-  addAttractorProperties() {
-    this.addPropertyXYZ(ENTITY_PROPERTY, "attractorPosition", false, DEFAULTS.attractorPosition.x, DEFAULTS.attractorPosition.y, DEFAULTS.attractorPosition.z).group("attractor").setter((data, value) => {
-      data.properties.attractorPosition = value;
-    }).getter((data) => data.properties.attractorPosition);
-    this.addPropertyNumber(ENTITY_PROPERTY, "attractorForce", 0, 1e3, 2, 0.01, DEFAULTS.attractorForce).group("attractor").setter((data, value) => {
-      data.properties.attractorForce = value;
-    }).getter((data) => data.properties.attractorForce);
+  addEnvironmentProperties() {
+    this.addPropertyImage(GENERAL_PROPERTY, "cubeMap", "").group("environment").setter((data, value) => {
+      data.properties.environment.cubeMapId = value;
+      data.setEnvironmentMap();
+      data.setBackground();
+    }).getter((data) => data.properties.environment.cubeMapId);
   }
-  addThrowerProperties() {
-    this.addPropertyXYZ(ENTITY_PROPERTY, "spawnPosition", false, DEFAULTS.spawnPosition.x, DEFAULTS.spawnPosition.y, DEFAULTS.spawnPosition.z).group("thrower").setter((data, value) => {
-      data.properties.spawnPosition = value;
-    }).getter((data) => data.properties.spawnPosition);
-    this.addPropertyXYZ(ENTITY_PROPERTY, "spawnRandomness", false, DEFAULTS.spawnRandomness.x, DEFAULTS.spawnRandomness.y, DEFAULTS.spawnRandomness.z).group("thrower").setter((data, value) => {
-      data.properties.spawnRandomness = value;
-    }).getter((data) => data.properties.spawnRandomness);
-    this.addPropertyNumber(ENTITY_PROPERTY, "count", 1, DEFAULTS.maxCount, 0, 1, DEFAULTS.count).group("thrower").setter((data, value) => {
-      data.properties.count = value;
-    }).getter((data) => data.properties.count);
-    this.addPropertyNumber(ENTITY_PROPERTY, "lifeTime", 0, 60, 2, 0.01, DEFAULTS.lifeTime).group("thrower").setter((data, value) => {
-      data.properties.lifeTime = value;
-    }).getter((data) => data.properties.lifeTime);
-    this.addPropertyNumber(ENTITY_PROPERTY, "throwTime", 0, 60, 2, 0.01, DEFAULTS.throwTime).group("thrower").setter((data, value) => {
-      data.properties.throwTime = value;
-    }).getter((data) => data.properties.throwTime);
-    this.addPropertyNumber(ENTITY_PROPERTY, "fadeTime", 0, 2, 2, 0.01, DEFAULTS.fadeTime).group("thrower").setter((data, value) => {
-      data.properties.fadeTime = value;
-    }).getter((data) => data.properties.fadeTime);
-    this.addPropertyNumber(ENTITY_PROPERTY, "trigger", 0, 1, 2, 0.01, DEFAULTS.trigger).group("thrower").setter((data, value) => {
-      data.properties.trigger = value;
-    }).getter((data) => data.properties.trigger);
-    this.addPropertyXYZ(ENTITY_PROPERTY, "linearImpulse", false, DEFAULTS.linearImpulse.x, DEFAULTS.linearImpulse.y, DEFAULTS.linearImpulse.z).group("thrower").setter((data, value) => {
-      data.properties.linearImpulse = value;
-    }).getter((data) => data.properties.linearImpulse);
-    this.addPropertyXYZ(ENTITY_PROPERTY, "angularImpulse", false, DEFAULTS.angularImpulse.x, DEFAULTS.angularImpulse.y, DEFAULTS.angularImpulse.z).group("thrower").setter((data, value) => {
-      data.properties.angularImpulse = value;
-    }).getter((data) => data.properties.angularImpulse);
+  addRendererProperties() {
+    this.addPropertyDropdown(GENERAL_PROPERTY, "toneMapping", DEFAULTS.toneMapping, TONE_MAP_KEYS).group("renderer").setter((data, value) => {
+      data.properties.renderer.toneMapping = value;
+      data.renderer.toneMapping = toneMappingOptions[value];
+    }).getter((data) => data.properties.renderer.toneMapping);
+    this.addPropertyNumber(GENERAL_PROPERTY, "toneMappingExposure", 0, 1, 2, 0.01, DEFAULTS.toneMappingExposure).group("renderer").setter((data, value) => {
+      data.properties.renderer.toneMappingExposure = value;
+      data.renderer.toneMappingExposure = value;
+    }).getter((data) => data.properties.renderer.toneMappingExposure);
   }
-  addMeshProperties() {
-    this.addPropertyObject3D(ENTITY_PROPERTY, "geometry").group("mesh").setter((data, value) => {
-      this.updateGeometry(data, value);
-    }).getter((data) => data.properties.objectId);
-    this.addPropertyBoolean(ENTITY_PROPERTY, "customMaterial", DEFAULTS.customMaterial).group("mesh").setter((data, value) => {
-      data.properties.customMaterial = value;
-      data.setCustomMaterial(value);
-    }).getter((data) => data.properties.customMaterial);
-    this.addPropertyMaterial(ENTITY_PROPERTY, "material", DEFAULTS.material).group("mesh").setter((data, value, property) => this.updateMaterial(data, data.properties, "material", property, value)).getter((data) => data.properties.material);
+  addPropertiesBackground() {
+    this.addPropertyColor(GENERAL_PROPERTY, "backgroundColor", DEFAULTS.backgroundColor).group("background").setter((data, value) => {
+      data.properties.background.color = new Color(value >>> 8);
+      data.setBackground();
+      if (data.properties.fog.useBackgroundColor)
+        data.setFog();
+    }).getter((data) => Number.parseInt(`${data.properties.background.color.getHex().toString(16)}ff`, 16));
+    this.addPropertyBoolean(GENERAL_PROPERTY, "useMap", DEFAULTS.useMap).group("background").setter((data, value) => {
+      data.properties.background.useMap = value;
+      data.setBackground();
+    }).getter((data) => data.properties.background.useMap);
+    this.addPropertyNumber(GENERAL_PROPERTY, "backgroundBlurriness", 0, 1, 2, 0.01, DEFAULTS.backgroundBlurriness).group("background").setter((data, value) => {
+      data.properties.background.blurriness = value;
+      data.scene.backgroundBlurriness = value;
+    }).getter((data) => data.properties.background.blurriness);
+    this.addPropertyNumber(GENERAL_PROPERTY, "backgroundIntensity", 0, 1, 2, 0.01, DEFAULTS.backgroundIntensity).group("background").setter((data, value) => {
+      data.properties.background.intensity = value;
+      data.scene.backgroundIntensity = value;
+    }).getter((data) => data.properties.background.intensity);
+    this.addPropertyBoolean(GENERAL_PROPERTY, "transparentBackground", DEFAULTS.transparentBackground).group("background").setter((data, value) => {
+      data.properties.background.transparent = value;
+      data.setBackground();
+    }).getter((data) => data.properties.background.transparent);
+  }
+  addFogProperties() {
+    this.addPropertyBoolean(GENERAL_PROPERTY, "useBackgroundColor", DEFAULTS.useBackgroundColor).group("fog").setter((data, value) => {
+      data.properties.fog.useBackgroundColor = value;
+      data.setFog();
+    }).getter((data) => data.properties.fog.useBackgroundColor);
+    this.addPropertyColor(GENERAL_PROPERTY, "fogColor", DEFAULTS.backgroundColor).group("fog").setter((data, value) => {
+      data.properties.fog.color = new Color(value >>> 8);
+      data.setFog();
+    }).getter((data) => Number.parseInt(`${data.properties.fog.color.getHex().toString(16)}ff`, 16));
+    this.addPropertyNumber(GENERAL_PROPERTY, "fogDensity", 0, 1, 4, 1e-4, DEFAULTS.fogDensity).group("fog").setter((data, value) => {
+      data.properties.fog.density = value;
+      data.setFog();
+    }).getter((data) => data.properties.fog.density);
+  }
+  addCameraProperties() {
+    this.addPropertyNumber(GENERAL_PROPERTY, "cameraFov", 1, 180, 0, 0.01, DEFAULTS.cameraFov).group("camera").setter((data, value) => {
+      data.properties.camera.fov = value;
+      data.camera.fov = value;
+      data.camera.updateProjectionMatrix();
+    }).getter((data) => data.properties.camera.fov);
+    this.addPropertyNumber(GENERAL_PROPERTY, "cameraNear", 1e-3, Infinity, 2, 0.01, DEFAULTS.cameraNear).group("camera").setter((data, value) => {
+      data.properties.camera.near = value;
+      data.camera.near = value;
+      data.camera.updateProjectionMatrix();
+    }).getter((data) => data.properties.camera.near);
+    this.addPropertyNumber(GENERAL_PROPERTY, "cameraFar", 1, Infinity, 0, 1, DEFAULTS.cameraFar).group("camera").setter((data, value) => {
+      data.properties.camera.far = value;
+      data.camera.far = value;
+      data.camera.updateProjectionMatrix();
+    }).getter((data) => data.properties.camera.far);
+    this.addPropertyNumber(GENERAL_PROPERTY, "cameraZoom", 1e-3, Infinity, 2, 0.01, DEFAULTS.cameraZoom).group("camera").setter((data, value) => {
+      data.properties.camera.zoom = value;
+      data.camera.zoom = value;
+      data.camera.updateProjectionMatrix();
+    }).getter((data) => data.properties.camera.zoom);
+    this.addPropertyXYZ(GENERAL_PROPERTY, "cameraLookAt", true, DEFAULTS.cameraLookAt.x, DEFAULTS.cameraLookAt.y, DEFAULTS.cameraLookAt.z).group("camera").setter((data, value) => {
+      data.properties.camera.lookAt.set(value.x, value.y, value.z);
+      data.orbitControls.target.copy(data.properties.camera.lookAt);
+      data.orbitControls.update();
+    }).getter((data) => data.properties.camera.lookAt);
+  }
+  addControlGeneralProperties() {
+    this.addPropertyBoolean(GENERAL_PROPERTY, "rotate", DEFAULTS.rotate).group("control").setter((data, value) => {
+      data.properties.controls.general.rotate = value;
+      data.orbitControls.enableRotate = value;
+    }).getter((data) => data.properties.controls.general.rotate);
+    this.addPropertyNumber(GENERAL_PROPERTY, "rotateSpeed", 1e-3, Infinity, 2, 0.01, DEFAULTS.rotateSpeed).group("control").setter((data, value) => {
+      data.properties.controls.general.rotateSpeed = value;
+      data.orbitControls.rotateSpeed = value;
+    }).getter((data) => data.properties.controls.general.rotateSpeed);
+    this.addPropertyBoolean(GENERAL_PROPERTY, "autoRotate", DEFAULTS.autoRotate).group("control").setter((data, value) => {
+      data.properties.controls.general.autoRotate = value;
+      data.orbitControls.autoRotate = value;
+    }).getter((data) => data.properties.controls.general.autoRotate);
+    this.addPropertyNumber(GENERAL_PROPERTY, "autoRotateSpeed", -Infinity, Infinity, 2, 0.01, DEFAULTS.autoRotateSpeed).group("control").setter((data, value) => {
+      data.properties.controls.general.autoRotateSpeed = value;
+      data.orbitControls.autoRotateSpeed = value;
+    }).getter((data) => data.properties.controls.general.autoRotateSpeed);
+    this.addPropertyBoolean(GENERAL_PROPERTY, "pan", DEFAULTS.pan).group("control").setter((data, value) => {
+      data.properties.controls.general.pan = value;
+      data.orbitControls.enablePan = value;
+    }).getter((data) => data.properties.controls.general.pan);
+    this.addPropertyNumber(GENERAL_PROPERTY, "panSpeed", 1e-3, Infinity, 2, 0.01, DEFAULTS.panSpeed).group("control").setter((data, value) => {
+      data.properties.controls.general.panSpeed = value;
+      data.orbitControls.panSpeed = value;
+    }).getter((data) => data.properties.controls.general.panSpeed);
+    this.addPropertyBoolean(GENERAL_PROPERTY, "zoom", DEFAULTS.zoom).group("control").setter((data, value) => {
+      data.properties.controls.general.zoom = value;
+      data.orbitControls.enableZoom = value;
+    }).getter((data) => data.properties.controls.general.zoom);
+    this.addPropertyNumber(GENERAL_PROPERTY, "zoomSpeed", 1e-3, Infinity, 2, 0.01, DEFAULTS.zoomSpeed).group("control").setter((data, value) => {
+      data.properties.controls.general.zoomSpeed = value;
+      data.orbitControls.zoomSpeed = value;
+    }).getter((data) => data.properties.controls.general.zoomSpeed);
+    this.addPropertyBoolean(GENERAL_PROPERTY, "zoomToCursor", DEFAULTS.zoomToCursor).group("control").setter((data, value) => {
+      data.properties.controls.general.zoomToCursor = value;
+      data.orbitControls.zoomToCursor = value;
+    }).getter((data) => data.properties.controls.general.zoomToCursor);
+    this.addPropertyBoolean(GENERAL_PROPERTY, "damping", DEFAULTS.damping).group("control").setter((data, value) => {
+      data.properties.controls.general.damping = value;
+      data.orbitControls.enableDamping = value;
+    }).getter((data) => data.properties.controls.general.damping);
+    this.addPropertyNumber(GENERAL_PROPERTY, "dampingFactor", 0, 1, 2, 0.01, DEFAULTS.dampingFactor).group("control").setter((data, value) => {
+      data.properties.controls.general.dampingFactor = value;
+      data.orbitControls.dampingFactor = value;
+    }).getter((data) => data.properties.controls.general.dampingFactor);
+  }
+  addControlLimitProperties() {
+    this.addPropertyBoolean(GENERAL_PROPERTY, "limitPolar", DEFAULTS.limitPolar).group("limits").setter((data, value) => {
+      data.properties.controls.limits.limitPolar = value;
+      data.limitPolarAngle();
+    }).getter((data) => data.properties.controls.limits.limitPolar);
+    this.addPropertyNumber(GENERAL_PROPERTY, "minPolarAngle", -Infinity, Infinity, 0, 0.01, DEFAULTS.minPolarAngle).group("limits").setter((data, value) => {
+      data.properties.controls.limits.minPolarAngle = value;
+      data.limitPolarAngle();
+    }).getter((data) => data.properties.controls.limits.minPolarAngle);
+    this.addPropertyNumber(GENERAL_PROPERTY, "maxPolarAngle", -Infinity, Infinity, 0, 0.01, DEFAULTS.maxPolarAngle).group("limits").setter((data, value) => {
+      data.properties.controls.limits.maxPolarAngle = value;
+      data.limitPolarAngle();
+    }).getter((data) => data.properties.controls.limits.maxPolarAngle);
+    this.addPropertyBoolean(GENERAL_PROPERTY, "limitAzimuth", DEFAULTS.limitAzimuth).group("limits").setter((data, value) => {
+      data.properties.controls.limits.limitAzimuth = value;
+      data.limitAzimuthAngle();
+    }).getter((data) => data.properties.controls.limits.limitAzimuth);
+    this.addPropertyNumber(GENERAL_PROPERTY, "minAzimuthAngle", -Infinity, Infinity, 0, 0.01, DEFAULTS.minAzimuthAngle).group("limits").setter((data, value) => {
+      data.properties.controls.limits.minAzimuthAngle = value;
+      data.limitAzimuthAngle();
+    }).getter((data) => data.properties.controls.limits.minAzimuthAngle);
+    this.addPropertyNumber(GENERAL_PROPERTY, "maxAzimuthAngle", -Infinity, Infinity, 0, 0.01, DEFAULTS.maxAzimuthAngle).group("limits").setter((data, value) => {
+      data.properties.controls.limits.maxAzimuthAngle = value;
+      data.limitAzimuthAngle();
+    }).getter((data) => data.properties.controls.limits.maxAzimuthAngle);
+    this.addPropertyBoolean(GENERAL_PROPERTY, "limitDistance", DEFAULTS.limitDistance).group("limits").setter((data, value) => {
+      data.properties.controls.limits.limitDistance = value;
+      data.limitDistance();
+    }).getter((data) => data.properties.controls.limits.limitDistance);
+    this.addPropertyNumber(GENERAL_PROPERTY, "minDistance", 0, Infinity, 2, 0.01, DEFAULTS.minDistance).group("limits").setter((data, value) => {
+      data.properties.controls.limits.minDistance = value;
+      data.limitDistance();
+    }).getter((data) => data.properties.controls.limits.minDistance);
+    this.addPropertyNumber(GENERAL_PROPERTY, "maxDistance", 0, Infinity, 2, 0.01, DEFAULTS.maxDistance).group("limits").setter((data, value) => {
+      data.properties.controls.limits.maxDistance = value;
+      data.limitDistance();
+    }).getter((data) => data.properties.controls.limits.maxDistance);
+  }
+  addAmbientLightProperties() {
+    this.addPropertyColor(GENERAL_PROPERTY, "ambientColor", DEFAULTS.ambientColor).group("ambientLight").setter((data, value) => {
+      data.properties.ambientLight.color = new Color(value >>> 8);
+      data.properties.ambientLight.ligth.color = data.properties.ambientLight.color;
+    }).getter((data) => Number.parseInt(`${data.properties.ambientLight.color.getHex().toString(16)}ff`, 16));
+    this.addPropertyNumber(GENERAL_PROPERTY, "ambientIntensity", 0, Infinity, 2, 0.01, DEFAULTS.ambientIntensity).group("ambientLight").setter((data, value) => {
+      data.properties.ambientLight.intensity = value;
+      data.properties.ambientLight.ligth.intensity = value;
+    }).getter((data) => data.properties.ambientLight.intensity);
   }
   addPhysicsProperties() {
-    this.addPropertyNumber(ENTITY_PROPERTY, "size", 0.01, 100, 2, 0.01, DEFAULTS.size).group("physics").setter((data, value) => {
-      data.instancedMesh.geometry.scale(1 / data.properties.size, 1 / data.properties.size, 1 / data.properties.size);
-      data.properties.size = value;
-      data.instancedMesh.geometry.scale(data.properties.size, data.properties.size, data.properties.size);
-      data.instancedMesh.geometry.computeVertexNormals();
-      data.instancedMesh.geometry.computeBoundingSphere();
-      data.instancedMesh.geometry.computeTangents();
-      data.instancedMesh.geometry.computeBoundingBox();
-    }).getter((data) => data.properties.size);
-    this.addPropertyNumber(ENTITY_PROPERTY, "mass", 0, 100, 2, 0.01, DEFAULTS.mass).group("physics").setter((data, value) => {
-      data.properties.mass = value;
-    }).getter((data) => data.properties.mass);
-    this.addPropertyNumber(ENTITY_PROPERTY, "angularInertia", 0, 2, 2, 0.01, DEFAULTS.angularInertia).group("physics").setter((data, value) => {
-      data.properties.angularInertia = value / DEFAULTS.angularInertiaMultiplier;
-    }).getter((data) => data.properties.angularInertia * DEFAULTS.angularInertiaMultiplier);
-    this.addPropertyNumber(ENTITY_PROPERTY, "linearDamping", 0, 100, 2, 0.01, DEFAULTS.linearDamping).group("physics").setter((data, value) => {
-      data.properties.linearDamping = value;
-    }).getter((data) => data.properties.linearDamping);
-    this.addPropertyNumber(ENTITY_PROPERTY, "angularDamping", 0, 100, 2, 0.01, DEFAULTS.angularDamping).group("physics").setter((data, value) => {
-      data.properties.angularDamping = value;
-    }).getter((data) => data.properties.angularDamping);
-    this.addPropertyNumber(ENTITY_PROPERTY, "friction", 0, 10, 2, 0.01, DEFAULTS.friction).group("physics").setter((data, value) => {
-      data.properties.friction = value;
-    }).getter((data) => data.properties.friction);
-    this.addPropertyNumber(ENTITY_PROPERTY, "restitution", 0, 10, 2, 0.01, DEFAULTS.restitution).group("physics").setter((data, value) => {
-      data.properties.restitution = value;
-    }).getter((data) => data.properties.restitution);
+    this.addPropertyBoolean(GENERAL_PROPERTY, "enablePhysics", DEFAULTS.enablePhysics).group("physics").setter((data, value) => {
+      data.properties.physics.enable = value;
+    }).getter((data) => data.properties.physics.enable);
+    this.addPropertyXYZ(GENERAL_PROPERTY, "gravity", true, DEFAULTS.gravity.x, DEFAULTS.gravity.y, DEFAULTS.gravity.z).group("physics").setter((data, value) => {
+      data.properties.physics.gravity.set(value.x, value.y, value.z);
+      data.rapierUtils.world.gravity = value;
+    }).getter((data) => data.properties.physics.gravity);
+    this.addPropertyBoolean(GENERAL_PROPERTY, "debugPhysics", DEFAULTS.debugPhysics).group("physics").setter((data, value) => {
+      data.properties.physics.debug = value;
+    }).getter((data) => data.properties.physics.debug);
   }
-  updateGeometry(data, id) {
-    this.loadGLTF(id, (gltf) => {
-      const geometries = [];
-      let material = new Material();
-      gltf.scene.traverse((node) => {
-        if (node instanceof Mesh) {
-          const mesh = node;
-          geometries.push(mesh.geometry);
-          material = node.material;
-        }
-      });
-      const mergedGeometry = mergeGeometries(geometries);
-      mergedGeometry.computeVertexNormals();
-      mergedGeometry.computeBoundingSphere();
-      mergedGeometry.computeTangents();
-      mergedGeometry.computeBoundingBox();
-      const size = mergedGeometry.boundingBox.getSize(new Vector3());
-      const scaleFactor = 1 / Math.max(size.x, size.y, size.z) / 10;
-      const scaleMatrix = new Matrix4().makeScale(scaleFactor, scaleFactor, scaleFactor);
-      mergedGeometry.applyMatrix4(scaleMatrix);
-      mergedGeometry.scale(data.properties.size, data.properties.size, data.properties.size);
-      data.instancedMesh.geometry = mergedGeometry;
-      data.originalMaterial = material;
-      data.setCustomMaterial(data.properties.customMaterial);
-    });
-    data.properties.objectId = id;
+  addShadowsProperties() {
+    this.addPropertyBoolean(GENERAL_PROPERTY, "enableShadowMap", DEFAULTS.enableShadowMap).group("shadowMap").setter((data, value) => {
+      data.properties.shadowMap.enable = value;
+      data.renderer.shadowMap.enabled = value;
+    }).getter((data) => data.properties.shadowMap.enable);
+    this.addPropertyDropdown(GENERAL_PROPERTY, "shadowMapType", DEFAULTS.shadowMapType, SHADOW_MAP_TYPES_KEYS).group("shadowMap").setter((data, value) => {
+      data.properties.shadowMap.type = value;
+      data.renderer.shadowMap.type = shadowMapTypes[value];
+    }).getter((data) => data.properties.shadowMap.type);
   }
   tick(parameters) {
-    this.deltaTime = parameters.elapsedTime - this.previousTime;
-    this.previousTime = parameters.elapsedTime;
-    this.getEntities().forEach(
-      (entityName) => {
-        const entityData = this.getEntity(entityName);
-        const instances = entityData.instances;
-        const properties = entityData.properties;
-        const throwerProperties = entityData.throwerProperties;
-        const count = entityData.instancedMesh.count;
-        if (properties.trigger > 0.5 && throwerProperties.previousTrigger <= 0.5) {
-          for (let i2 = 0; i2 < properties.count; i2++) {
-            if (entityData.throwerProperties.lastActive >= count) {
-              entityData.throwerProperties.lastActive = 0;
-            }
-            const instance = instances[entityData.throwerProperties.lastActive];
-            const throwTime = parameters.elapsedTime + properties.throwTime * i2 / properties.count;
-            instance.properties.lifeTime = 0;
-            instance.properties.throwTime = throwTime;
-            instance.properties.state = 1;
-            entityData.throwerProperties.lastActive += 1;
-          }
-        }
-        entityData.throwerProperties.previousTrigger = properties.trigger;
-        for (let index = 0; index < count; index++) {
-          const state = instances[index].properties.state;
-          const throwTime = instances[index].properties.throwTime;
-          if (state === 1 && throwTime <= parameters.elapsedTime && throwTime !== 0) {
-            entityData.throwInstance(index);
-          }
-          if (state === 2) {
-            entityData.activeInstance(index, this.deltaTime);
-          }
-          if (state === 3) {
-            entityData.killInstance(index);
-          }
-        }
-        entityData.instancedMesh.instanceMatrix.needsUpdate = true;
-        entityData.instancedMesh.computeBoundingSphere();
-      }
-    );
+    const generalData = this.getGeneralData();
+    generalData.rapierUtils.updateDebug(generalData.properties.physics.debug);
     super.tick(parameters);
   }
 }
 const digoAssetData = {
   info: {
     name: {
-      en: "Thrower",
-      es: "Disparador"
+      en: "Scene",
+      es: "Escena"
     },
     category: "objects",
-    icon: "AutoAwesome",
+    icon: "ViewInAr",
     vendor: "Digo",
     license: "MIT",
     version: "1.0",
@@ -6455,7 +6424,7 @@ const digoAssetData = {
     }
   },
   create: (entities) => {
-    return new Thrower(entities || []);
+    return new SceneDigo();
   }
 };
 Helper.loadAsset(digoAssetData);
