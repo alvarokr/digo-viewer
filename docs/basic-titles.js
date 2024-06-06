@@ -55,6 +55,10 @@ class Helper {
         loadResourceAsBase64: async (id) => "",
         loadGLTF: (id, onLoad) => {
         },
+        loadTexture: (id, onLoad) => {
+        },
+        loadRGBE: (id, onLoad) => {
+        },
         getResourceURL: (id) => "",
         forceRefresh: () => {
         },
@@ -67,6 +71,22 @@ class Helper {
         getMIDINotesVelocity: (input) => [],
         getMIDIControlsVelocity: (input) => [],
         getThreeWebGLRenderer: () => {
+        },
+        getThreeCamera: () => {
+        },
+        getThreeScene: () => {
+        },
+        getThreeOrbitControls: () => {
+        },
+        getThreeEffectComposer: () => {
+        },
+        getRapierWorld: () => {
+        },
+        getRapierInstance: () => {
+        },
+        updateMaterial: (mesh, property, value, previousValue) => {
+        },
+        setEnvironmentMap: (resourceId, alsoBackground) => {
         }
       };
     }
@@ -295,6 +315,15 @@ class Asset {
     };
     return this.addProperty(general, property);
   }
+  addPropertyMaterial(general, id, defaultValue) {
+    const property = {
+      id,
+      type: "material",
+      defaultValue,
+      general
+    };
+    return this.addProperty(general, property);
+  }
   addPropertyMIDI(general, id, defaultValue) {
     const property = {
       id,
@@ -330,6 +359,16 @@ class Asset {
       general,
       keys,
       icons
+    };
+    return this.addProperty(general, property);
+  }
+  addPropertyDropdown(general, id, defaultValue, keys) {
+    const property = {
+      id,
+      type: "dropdown",
+      defaultValue,
+      general,
+      keys
     };
     return this.addProperty(general, property);
   }
@@ -504,6 +543,7 @@ class Asset {
   }
   tick(parameters) {
   }
+  // Rapier utility functions. TO REVIEW
 }
 var n, l, u, i, o, r, f, c = {}, s = [], a = /acit|ex(?:s|g|n|p|$)|rph|grid|ows|mnc|ntw|ine[ch]|zoo|^ord|itera/i, h = Array.isArray;
 function v(n2, l2) {
@@ -876,7 +916,6 @@ class DigoAssetHTML extends Asset {
   }
   updateProperty(entity, property, value, nextUpdate = 0) {
     var _a, _b, _c, _d, _e;
-    console.log({ entity, property, value });
     if (property === AssetPropertyId.LAYOUT_POSITION) {
       this.layoutPosition = value;
       (_a = Helper.getGlobal()) == null ? void 0 : _a.forceRefresh();
