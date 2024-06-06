@@ -1,4 +1,4 @@
-import { B as BufferGeometry, a as BufferAttribute, L as LineSegments, b as LineBasicMaterial, c as BoxGeometry, S as SphereGeometry, I as IcosahedronGeometry, V as Vector3, Q as Quaternion, E as Euler, d as Scene, M as Material, e as Mesh, f as Matrix4, g as InstancedMesh, h as MeshPhysicalMaterial, D as DynamicDrawUsage, i as MathUtils } from "./three.js";
+import { B as BufferGeometry, a as BufferAttribute, L as LineSegments, b as LineBasicMaterial, c as BoxGeometry, S as SphereGeometry, I as IcosahedronGeometry, V as Vector3, Q as Quaternion, E as Euler, M as Mesh, d as MeshPhysicalMaterial, e as MeshBasicMaterial, f as Scene, g as Material, h as Matrix4, i as InstancedMesh, D as DynamicDrawUsage, j as MathUtils } from "./three.js";
 (function polyfill() {
   const relList = document.createElement("link").relList;
   if (relList && relList.supports && relList.supports("modulepreload")) {
@@ -55,6 +55,8 @@ class Helper {
         },
         loadResourceAsBase64: async (id) => "",
         loadGLTF: (id, onLoad) => {
+        },
+        loadTexture: (id, onLoad) => {
         },
         loadRGBE: (id, onLoad) => {
         },
@@ -651,6 +653,10 @@ class DigoAssetThree extends Asset {
   loadGLTF(id, onLoad) {
     var _a;
     (_a = Helper.getGlobal()) == null ? void 0 : _a.loadGLTF(id, onLoad);
+  }
+  loadTexture(id, onLoad) {
+    var _a;
+    (_a = Helper.getGlobal()) == null ? void 0 : _a.loadTexture(id, onLoad);
   }
   loadRGBE(id, onLoad) {
     var _a;
@@ -6030,6 +6036,10 @@ const labels = {
     en: "Mesh",
     es: "Objeto"
   },
+  meshType: {
+    en: "Type",
+    es: "Tipo"
+  },
   physics: {
     en: "Physics",
     es: "Físicas"
@@ -6068,8 +6078,21 @@ const labels = {
   }
 };
 let RAPIER_UTILS;
+const meshTypeOptions = {
+  Sphere: new Mesh(
+    new SphereGeometry(0.1, 32, 32),
+    new MeshPhysicalMaterial({ name: `${Math.random()}` })
+  ),
+  Cube: new Mesh(
+    new BoxGeometry(0.05, 0.05, 0.05),
+    new MeshPhysicalMaterial({ name: `${Math.random()}` })
+  ),
+  Custom: new Mesh(new SphereGeometry(), new MeshBasicMaterial())
+};
+const MESH_TYPE_KEYS = Object.keys(meshTypeOptions);
 const DEFAULTS = {
   maxCount: 1e3,
+  meshType: MESH_TYPE_KEYS[0],
   customMaterial: false,
   material: { digoType: "physical", color: 16777215 },
   objectId: "",
@@ -6099,6 +6122,7 @@ class EntityData extends AssetEntityData {
   constructor() {
     super();
     this.properties = {
+      meshType: DEFAULTS.meshType,
       objectId: DEFAULTS.objectId,
       material: { digoType: "physical", color: 16777215 },
       customMaterial: DEFAULTS.customMaterial,
@@ -6329,8 +6353,13 @@ class Thrower extends DigoAssetThree {
     }).getter((data) => data.properties.angularImpulse);
   }
   addMeshProperties() {
+    this.addPropertyDropdown(ENTITY_PROPERTY, "meshType", DEFAULTS.meshType, MESH_TYPE_KEYS).group("mesh").setter((data, value) => {
+      data.properties.meshType = value;
+      this.updateGeometry(data);
+    }).getter((data) => data.properties.meshType);
     this.addPropertyObject3D(ENTITY_PROPERTY, "geometry").group("mesh").setter((data, value) => {
-      this.updateGeometry(data, value);
+      data.properties.objectId = value;
+      this.updateGeometry(data);
     }).getter((data) => data.properties.objectId);
     this.addPropertyBoolean(ENTITY_PROPERTY, "customMaterial", DEFAULTS.customMaterial).group("mesh").setter((data, value) => {
       data.properties.customMaterial = value;
@@ -6367,32 +6396,44 @@ class Thrower extends DigoAssetThree {
       data.properties.restitution = value;
     }).getter((data) => data.properties.restitution);
   }
-  updateGeometry(data, id) {
-    this.loadGLTF(id, (gltf) => {
-      const geometries = [];
-      let material = new Material();
-      gltf.scene.traverse((node) => {
-        if (node instanceof Mesh) {
-          const mesh = node;
-          geometries.push(mesh.geometry);
-          material = node.material;
-        }
-      });
-      const mergedGeometry = mergeGeometries(geometries);
-      mergedGeometry.computeVertexNormals();
-      mergedGeometry.computeBoundingSphere();
-      mergedGeometry.computeTangents();
-      mergedGeometry.computeBoundingBox();
-      const size = mergedGeometry.boundingBox.getSize(new Vector3());
-      const scaleFactor = 1 / Math.max(size.x, size.y, size.z) / 10;
-      const scaleMatrix = new Matrix4().makeScale(scaleFactor, scaleFactor, scaleFactor);
-      mergedGeometry.applyMatrix4(scaleMatrix);
-      mergedGeometry.scale(data.properties.size, data.properties.size, data.properties.size);
-      data.instancedMesh.geometry = mergedGeometry;
-      data.originalMaterial = material;
-      data.setCustomMaterial(data.properties.customMaterial);
-    });
-    data.properties.objectId = id;
+  updateGeometry(entityData) {
+    switch (entityData.properties.meshType) {
+      case MESH_TYPE_KEYS[2]:
+        this.loadGLTF(entityData.properties.objectId, (gltf) => {
+          const geometries = [];
+          let material = new Material();
+          gltf.scene.traverse((node) => {
+            if (node instanceof Mesh) {
+              const mesh = node;
+              geometries.push(mesh.geometry);
+              material = node.material;
+            }
+          });
+          const mergedGeometry = mergeGeometries(geometries);
+          mergedGeometry.computeVertexNormals();
+          mergedGeometry.computeBoundingSphere();
+          mergedGeometry.computeTangents();
+          mergedGeometry.computeBoundingBox();
+          const size = mergedGeometry.boundingBox.getSize(new Vector3());
+          const scaleFactor = 1 / Math.max(size.x, size.y, size.z) / 10;
+          const scaleMatrix = new Matrix4().makeScale(scaleFactor, scaleFactor, scaleFactor);
+          mergedGeometry.applyMatrix4(scaleMatrix);
+          mergedGeometry.scale(entityData.properties.size, entityData.properties.size, entityData.properties.size);
+          entityData.instancedMesh.geometry = mergedGeometry;
+          entityData.originalMaterial = material;
+          entityData.setCustomMaterial(entityData.properties.customMaterial);
+        });
+        break;
+      default:
+        meshTypeOptions[entityData.properties.meshType].geometry.computeVertexNormals();
+        meshTypeOptions[entityData.properties.meshType].geometry.computeBoundingSphere();
+        meshTypeOptions[entityData.properties.meshType].geometry.computeTangents();
+        meshTypeOptions[entityData.properties.meshType].geometry.computeBoundingBox();
+        entityData.instancedMesh.geometry = meshTypeOptions[entityData.properties.meshType].geometry;
+        entityData.originalMaterial = meshTypeOptions[entityData.properties.meshType].material;
+        entityData.setCustomMaterial(entityData.properties.customMaterial);
+        break;
+    }
   }
   tick(parameters) {
     this.deltaTime = parameters.elapsedTime - this.previousTime;

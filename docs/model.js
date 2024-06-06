@@ -56,6 +56,8 @@ class Helper {
         loadResourceAsBase64: async (id) => "",
         loadGLTF: (id, onLoad) => {
         },
+        loadTexture: (id, onLoad) => {
+        },
         loadRGBE: (id, onLoad) => {
         },
         getResourceURL: (id) => "",
@@ -652,6 +654,10 @@ class DigoAssetThree extends Asset {
     var _a;
     (_a = Helper.getGlobal()) == null ? void 0 : _a.loadGLTF(id, onLoad);
   }
+  loadTexture(id, onLoad) {
+    var _a;
+    (_a = Helper.getGlobal()) == null ? void 0 : _a.loadTexture(id, onLoad);
+  }
   loadRGBE(id, onLoad) {
     var _a;
     (_a = Helper.getGlobal()) == null ? void 0 : _a.loadRGBE(id, onLoad);
@@ -721,8 +727,8 @@ class ImportedModel extends Object3D {
     };
   }
   startAnimations() {
-    var _a;
-    (_a = this.model) == null ? void 0 : _a.animationManager.animations.forEach((animation) => {
+    var _a, _b;
+    (_b = (_a = this.model) == null ? void 0 : _a.animationManager) == null ? void 0 : _b.animations.forEach((animation) => {
       animation.action.play();
       animation.action.setEffectiveWeight(0);
     });
@@ -848,8 +854,8 @@ class ImportedModel extends Object3D {
     }
   }
   animationExist(index) {
-    var _a;
-    return !!((_a = this.model) == null ? void 0 : _a.animationManager.animations[index]);
+    var _a, _b;
+    return !!((_b = (_a = this.model) == null ? void 0 : _a.animationManager) == null ? void 0 : _b.animations[index]);
   }
   getValidBlends(blends) {
     const validBlends = [];
@@ -901,19 +907,21 @@ class ImportedModel extends Object3D {
   }
   setManualTime(percent) {
     var _a;
-    (_a = this.model) == null ? void 0 : _a.animationManager.animations.forEach((animation) => {
-      const action = animation.action;
-      const totalDuration = action.getClip().duration;
-      const time = totalDuration * percent / 100;
-      action.time = time;
-    });
-    const mixer = this.model.animationManager.mixer;
-    mixer.update(0);
+    if ((_a = this.model) == null ? void 0 : _a.animationManager) {
+      this.model.animationManager.animations.forEach((animation) => {
+        const action = animation.action;
+        const totalDuration = action.getClip().duration;
+        const time = totalDuration * percent / 100;
+        action.time = time;
+      });
+      const mixer = this.model.animationManager.mixer;
+      mixer.update(0);
+    }
   }
   tick(autoAnimate, physics, updateScale, deltaTime) {
-    var _a;
+    var _a, _b;
     if (autoAnimate)
-      (_a = this.model) == null ? void 0 : _a.animationManager.mixer.update(deltaTime);
+      (_b = (_a = this.model) == null ? void 0 : _a.animationManager) == null ? void 0 : _b.mixer.update(deltaTime);
     if (physics)
       this.updateTransformPhysics(updateScale);
   }

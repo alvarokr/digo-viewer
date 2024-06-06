@@ -1,4 +1,4 @@
-import { L as LineSegments, B as BufferGeometry, a as LineBasicMaterial, b as BufferAttribute, c as BoxGeometry, S as SphereGeometry, I as IcosahedronGeometry, V as Vector3, Q as Quaternion, E as Euler, d as Scene, C as Color, N as NoToneMapping, e as LinearToneMapping, R as ReinhardToneMapping, f as CineonToneMapping, A as ACESFilmicToneMapping, g as AgXToneMapping, h as CustomToneMapping, i as BasicShadowMap, P as PCFShadowMap, j as PCFSoftShadowMap, D as DataTexture, k as AmbientLight, l as EquirectangularReflectionMapping, F as FogExp2 } from "./three.js";
+import { L as LineSegments, B as BufferGeometry, a as LineBasicMaterial, b as BufferAttribute, c as BoxGeometry, S as SphereGeometry, I as IcosahedronGeometry, V as Vector3, Q as Quaternion, E as Euler, d as Scene, C as Color, N as NoToneMapping, e as LinearToneMapping, R as ReinhardToneMapping, f as CineonToneMapping, A as ACESFilmicToneMapping, g as AgXToneMapping, h as CustomToneMapping, D as DataTexture, i as AmbientLight, j as EquirectangularReflectionMapping, F as FogExp2 } from "./three.js";
 (function polyfill() {
   const relList = document.createElement("link").relList;
   if (relList && relList.supports && relList.supports("modulepreload")) {
@@ -55,6 +55,8 @@ class Helper {
         },
         loadResourceAsBase64: async (id) => "",
         loadGLTF: (id, onLoad) => {
+        },
+        loadTexture: (id, onLoad) => {
         },
         loadRGBE: (id, onLoad) => {
         },
@@ -649,6 +651,10 @@ class DigoAssetThree extends Asset {
   loadGLTF(id, onLoad) {
     var _a;
     (_a = Helper.getGlobal()) == null ? void 0 : _a.loadGLTF(id, onLoad);
+  }
+  loadTexture(id, onLoad) {
+    var _a;
+    (_a = Helper.getGlobal()) == null ? void 0 : _a.loadTexture(id, onLoad);
   }
   loadRGBE(id, onLoad) {
     var _a;
@@ -6020,12 +6026,6 @@ const toneMappingOptions = {
   Custom: CustomToneMapping
 };
 const TONE_MAP_KEYS = Object.keys(toneMappingOptions);
-const shadowMapTypes = {
-  BasicShadowMap,
-  PCFShadowMap,
-  PCFSoftShadowMap
-};
-const SHADOW_MAP_TYPES_KEYS = Object.keys(shadowMapTypes);
 const DEFAULTS = {
   toneMapping: TONE_MAP_KEYS[0],
   toneMappingExposure: 1,
@@ -6067,9 +6067,7 @@ const DEFAULTS = {
   ambientIntensity: 1,
   enablePhysics: true,
   gravity: { x: 0, y: -0.98, z: 0 },
-  debugPhysics: false,
-  enableShadowMap: true,
-  shadowMapType: SHADOW_MAP_TYPES_KEYS[2]
+  debugPhysics: false
 };
 class GeneralData extends AssetGeneralData {
   constructor() {
@@ -6138,10 +6136,6 @@ class GeneralData extends AssetGeneralData {
         enable: DEFAULTS.enablePhysics,
         gravity: new Vector3().copy(DEFAULTS.gravity),
         debug: DEFAULTS.debugPhysics
-      },
-      shadowMap: {
-        enable: DEFAULTS.enableShadowMap,
-        type: DEFAULTS.shadowMapType
       }
     };
     this.scene = (_a = Helper.getGlobal()) == null ? void 0 : _a.getThreeScene();
@@ -6151,6 +6145,7 @@ class GeneralData extends AssetGeneralData {
     const world = (_e = Helper.getGlobal()) == null ? void 0 : _e.getRapierWorld();
     const rapierInstance = (_f = Helper.getGlobal()) == null ? void 0 : _f.getRapierInstance();
     this.rapierUtils = new RapierUtils(this.scene, world, rapierInstance);
+    this.setBackground();
   }
   setEnvironmentMap() {
     var _a;
@@ -6201,7 +6196,6 @@ class SceneDigo extends DigoAssetThree {
     this.addControlLimitProperties();
     this.addAmbientLightProperties();
     this.addPhysicsProperties();
-    this.addShadowsProperties();
   }
   addEnvironmentProperties() {
     this.addPropertyImage(GENERAL_PROPERTY, "cubeMap", "").group("environment").setter((data, value) => {
@@ -6390,16 +6384,6 @@ class SceneDigo extends DigoAssetThree {
     this.addPropertyBoolean(GENERAL_PROPERTY, "debugPhysics", DEFAULTS.debugPhysics).group("physics").setter((data, value) => {
       data.properties.physics.debug = value;
     }).getter((data) => data.properties.physics.debug);
-  }
-  addShadowsProperties() {
-    this.addPropertyBoolean(GENERAL_PROPERTY, "enableShadowMap", DEFAULTS.enableShadowMap).group("shadowMap").setter((data, value) => {
-      data.properties.shadowMap.enable = value;
-      data.renderer.shadowMap.enabled = value;
-    }).getter((data) => data.properties.shadowMap.enable);
-    this.addPropertyDropdown(GENERAL_PROPERTY, "shadowMapType", DEFAULTS.shadowMapType, SHADOW_MAP_TYPES_KEYS).group("shadowMap").setter((data, value) => {
-      data.properties.shadowMap.type = value;
-      data.renderer.shadowMap.type = shadowMapTypes[value];
-    }).getter((data) => data.properties.shadowMap.type);
   }
   tick(parameters) {
     const generalData = this.getGeneralData();

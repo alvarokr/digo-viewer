@@ -1,4 +1,4 @@
-import { S as Scene, C as Color, V as Vector3, O as Object3D, a as SpotLight, b as SpotLightHelper } from "./three.js";
+import { O as OrthographicCamera, M as Mesh, B as BufferGeometry, F as Float32BufferAttribute, S as ShaderMaterial, U as UniformsUtils, a as Scene } from "./three.js";
 (function polyfill() {
   const relList = document.createElement("link").relList;
   if (relList && relList.supports && relList.supports("modulepreload")) {
@@ -79,6 +79,8 @@ class Helper {
         },
         getThreeOrbitControls: () => {
         },
+        getThreeEffectComposer: () => {
+        },
         getRapierWorld: () => {
         },
         getRapierInstance: () => {
@@ -117,7 +119,7 @@ class Helper {
     }
   }
 }
-const ENTITY_PROPERTY = false;
+const GENERAL_PROPERTY = true;
 var AssetPropertyId = /* @__PURE__ */ ((AssetPropertyId2) => {
   AssetPropertyId2["POSITION"] = "position";
   AssetPropertyId2["SCALE"] = "scale";
@@ -129,8 +131,6 @@ var AssetPropertyId = /* @__PURE__ */ ((AssetPropertyId2) => {
   return AssetPropertyId2;
 })(AssetPropertyId || {});
 class AssetGeneralData {
-}
-class AssetEntityData {
 }
 class AssetPropertyClass {
   constructor(definition) {
@@ -681,186 +681,179 @@ class DigoAssetThree extends Asset {
   tick(parameters) {
   }
 }
-function convertToRadians(degrees) {
-  const radians = degrees * (Math.PI / 180);
-  return radians;
+class Pass {
+  constructor() {
+    this.isPass = true;
+    this.enabled = true;
+    this.needsSwap = true;
+    this.clear = false;
+    this.renderToScreen = false;
+  }
+  setSize() {
+  }
+  render() {
+    console.error("THREE.Pass: .render() must be implemented in derived pass.");
+  }
+  dispose() {
+  }
 }
+const _camera = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
+class FullscreenTriangleGeometry extends BufferGeometry {
+  constructor() {
+    super();
+    this.setAttribute("position", new Float32BufferAttribute([-1, 3, 0, -1, -1, 0, 3, -1, 0], 3));
+    this.setAttribute("uv", new Float32BufferAttribute([0, 2, 0, 0, 2, 0], 2));
+  }
+}
+const _geometry = new FullscreenTriangleGeometry();
+class FullScreenQuad {
+  constructor(material) {
+    this._mesh = new Mesh(_geometry, material);
+  }
+  dispose() {
+    this._mesh.geometry.dispose();
+  }
+  render(renderer) {
+    renderer.render(this._mesh, _camera);
+  }
+  get material() {
+    return this._mesh.material;
+  }
+  set material(value) {
+    this._mesh.material = value;
+  }
+}
+class ShaderPass extends Pass {
+  constructor(shader, textureID) {
+    super();
+    this.textureID = textureID !== void 0 ? textureID : "tDiffuse";
+    if (shader instanceof ShaderMaterial) {
+      this.uniforms = shader.uniforms;
+      this.material = shader;
+    } else if (shader) {
+      this.uniforms = UniformsUtils.clone(shader.uniforms);
+      this.material = new ShaderMaterial({
+        name: shader.name !== void 0 ? shader.name : "unspecified",
+        defines: Object.assign({}, shader.defines),
+        uniforms: this.uniforms,
+        vertexShader: shader.vertexShader,
+        fragmentShader: shader.fragmentShader
+      });
+    }
+    this.fsQuad = new FullScreenQuad(this.material);
+  }
+  render(renderer, writeBuffer, readBuffer) {
+    if (this.uniforms[this.textureID]) {
+      this.uniforms[this.textureID].value = readBuffer.texture;
+    }
+    this.fsQuad.material = this.material;
+    if (this.renderToScreen) {
+      renderer.setRenderTarget(null);
+      this.fsQuad.render(renderer);
+    } else {
+      renderer.setRenderTarget(writeBuffer);
+      if (this.clear)
+        renderer.clear(renderer.autoClearColor, renderer.autoClearDepth, renderer.autoClearStencil);
+      this.fsQuad.render(renderer);
+    }
+  }
+  dispose() {
+    this.material.dispose();
+    this.fsQuad.dispose();
+  }
+}
+const VignetteShader = {
+  name: "VignetteShader",
+  uniforms: {
+    "tDiffuse": { value: null },
+    "offset": { value: 1 },
+    "darkness": { value: 1 }
+  },
+  vertexShader: (
+    /* glsl */
+    `
+
+		varying vec2 vUv;
+
+		void main() {
+
+			vUv = uv;
+			gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+
+		}`
+  ),
+  fragmentShader: (
+    /* glsl */
+    `
+
+		uniform float offset;
+		uniform float darkness;
+
+		uniform sampler2D tDiffuse;
+
+		varying vec2 vUv;
+
+		void main() {
+
+			// Eskil's vignette
+
+			vec4 texel = texture2D( tDiffuse, vUv );
+			vec2 uv = ( vUv - vec2( 0.5 ) ) * vec2( offset );
+			gl_FragColor = vec4( mix( texel.rgb, vec3( 1.0 - darkness ), dot( uv, uv ) ), texel.a );
+
+		}`
+  )
+};
 const labels = {
-  angle: {
-    en: "Angle",
-    es: "Ángulo"
+  toneMapping: {
+    en: "Tone Mapping",
+    es: "Mapeo de Tonos"
   },
-  castShadow: {
-    en: "Cast Shadow",
-    es: "Sombras"
-  },
-  color: {
-    en: "Color",
-    es: "Color"
-  },
-  decay: {
-    en: "Decay",
-    es: "Decaimiento"
-  },
-  distance: {
-    en: "Distance",
-    es: "Distancia"
-  },
-  worldCoordinates: {
-    en: "World",
-    es: "Global"
-  },
-  helper: {
-    en: "Helper",
-    es: "Ayudante"
-  },
-  imageId: {
-    en: "Image",
-    es: "Imagen"
-  },
-  intensity: {
-    en: "Intensity",
-    es: "Intensidad"
-  },
-  penumbra: {
-    en: "Penumbra",
-    es: "Penumbra"
-  },
-  shadows: {
-    en: "Shadows",
-    es: "Sombras"
+  toneMappingExposure: {
+    en: "Exposure",
+    es: "Exposición de Mapeo de Tonos"
   }
 };
 const DEFAULTS = {
-  color: 16777215,
-  intensity: 100,
-  distance: 2,
-  angle: 30,
-  penumbra: 1,
-  decay: 2,
-  worldCoordinates: true,
-  lookAt: { x: 0, y: 0, z: 0 },
-  castShadow: true,
-  helper: true
+  offset: 0.25,
+  darkness: 0.1
 };
-class EntityData extends AssetEntityData {
+class GeneralData extends AssetGeneralData {
   constructor() {
     var _a;
     super();
+    this.vignettePass = new ShaderPass(VignetteShader);
     this.properties = {
-      imageId: "",
-      color: new Color(DEFAULTS.color),
-      intensity: DEFAULTS.intensity,
-      distance: DEFAULTS.distance,
-      angle: DEFAULTS.angle,
-      penumbra: DEFAULTS.penumbra,
-      decay: DEFAULTS.decay,
-      worldCoordinates: DEFAULTS.worldCoordinates,
-      lookAt: new Vector3().copy(DEFAULTS.lookAt),
-      castShadow: DEFAULTS.castShadow,
-      helper: DEFAULTS.helper
+      offset: DEFAULTS.offset,
+      darkness: DEFAULTS.darkness
     };
-    this.container = new Object3D();
-    this.spotLight = new SpotLight();
-    this.helper = new SpotLightHelper(this.spotLight);
-    this.spotLightTarget = new Object3D();
-    this.container.add(this.spotLight);
-    this.container.add(this.helper);
-    (_a = Helper.getGlobal()) == null ? void 0 : _a.getThreeScene().add(this.spotLight.target);
-    this.spotLight.target = this.spotLightTarget;
-    this.spotLight.castShadow = this.properties.castShadow;
-    this.spotLight.intensity = this.properties.intensity;
-    this.spotLight.penumbra = this.properties.penumbra;
-    this.spotLight.angle = convertToRadians(this.properties.angle);
-    this.spotLight.distance = this.properties.distance;
+    this.effectComposer = (_a = Helper.getGlobal()) == null ? void 0 : _a.getThreeEffectComposer();
+    this.vignettePass = new ShaderPass(VignetteShader);
+    this.effectComposer.addPass(this.vignettePass);
   }
 }
-class SpotLightDigo extends DigoAssetThree {
-  constructor(entities) {
+class PostProcessingDigo extends DigoAssetThree {
+  constructor() {
     super();
     this.setLabels(labels);
-    const generalData = new AssetGeneralData();
+    const generalData = new GeneralData();
     generalData.container = new Scene();
     this.setGeneralData(generalData);
-    this.addDefaultProperties(true, true);
-    this.addProperties();
-    entities.forEach((entity) => {
-      this.createEntity(entity);
-    });
-  }
-  createEntity(id) {
-    const entityData = new EntityData();
-    entityData.component = entityData.container;
-    this.addEntity(id, entityData);
-    this.getContainer().add(entityData.component);
-  }
-  addProperties() {
-    this.addPropertyImage(ENTITY_PROPERTY, "imageId", "").setter((data, value) => {
-      var _a;
-      data.properties.imageId = value;
-      (_a = Helper.getGlobal()) == null ? void 0 : _a.loadTexture(data.properties.imageId, (texture) => {
-        data.spotLight.map = texture;
-      });
-    }).getter((data) => data.properties.imageId);
-    this.addPropertyColor(ENTITY_PROPERTY, "color", DEFAULTS.color).setter((data, value) => {
-      data.properties.color = new Color(value >>> 8);
-      data.spotLight.color = data.properties.color;
-    }).getter((data) => Number.parseInt(`${data.properties.color.getHex().toString(16)}ff`, 16));
-    this.addPropertyNumber(ENTITY_PROPERTY, "intensity", 0, Infinity, 2, 0.01, DEFAULTS.intensity).setter((data, value) => {
-      data.properties.intensity = value;
-      data.spotLight.intensity = value;
-    }).getter((data) => data.properties.intensity);
-    this.addPropertyNumber(ENTITY_PROPERTY, "distance", 0.01, Infinity, 2, 0.01, DEFAULTS.distance).setter((data, value) => {
-      data.properties.distance = value;
-      data.spotLight.distance = value;
-    }).getter((data) => data.properties.distance);
-    this.addPropertyNumber(ENTITY_PROPERTY, "angle", 0, 180, 2, 0.01, DEFAULTS.angle).setter((data, value) => {
-      data.properties.angle = value;
-      data.spotLight.angle = convertToRadians(value);
-    }).getter((data) => data.properties.angle);
-    this.addPropertyNumber(ENTITY_PROPERTY, "penumbra", 0, 1, 2, 0.01, DEFAULTS.penumbra).setter((data, value) => {
-      data.properties.penumbra = value;
-      data.spotLight.penumbra = value;
-    }).getter((data) => data.properties.penumbra);
-    this.addPropertyNumber(ENTITY_PROPERTY, "decay", 0, 2, 2, 0.01, DEFAULTS.decay).setter((data, value) => {
-      data.properties.decay = value;
-      data.spotLight.decay = value;
-    }).getter((data) => data.properties.decay);
-    this.addPropertyBoolean(ENTITY_PROPERTY, "worldCoordinates", DEFAULTS.worldCoordinates).setter((data, value) => {
-      var _a;
-      data.properties.worldCoordinates = value;
-      if (value) {
-        (_a = Helper.getGlobal()) == null ? void 0 : _a.getThreeScene().add(data.spotLight.target);
-      } else {
-        data.container.add(data.spotLightTarget);
-      }
-    }).getter((data) => data.properties.worldCoordinates);
-    this.addPropertyXYZ(ENTITY_PROPERTY, "lookAt", false, DEFAULTS.lookAt.x, DEFAULTS.lookAt.y, DEFAULTS.lookAt.z).setter((data, value) => {
-      data.properties.lookAt.set(value.x, value.y, value.z);
-      data.spotLightTarget.position.set(value.x, value.y, value.z);
-    }).getter((data) => data.properties.lookAt);
-    this.addPropertyBoolean(ENTITY_PROPERTY, "castShadow", DEFAULTS.castShadow).setter((data, value) => {
-      data.properties.castShadow = value;
-      data.spotLight.castShadow = value;
-    }).getter((data) => data.properties.castShadow);
-    this.addPropertyBoolean(ENTITY_PROPERTY, "helper", DEFAULTS.helper).setter((data, value) => {
-      data.properties.helper = value;
-      data.helper.visible = value;
-    }).getter((data) => data.properties.helper);
-  }
-  tick(parameters) {
-    this.getEntities().forEach((entityName) => {
-      const entityData = this.getEntity(entityName);
-      entityData.helper.update();
-    });
-    super.tick(parameters);
+    this.addPropertyNumber(GENERAL_PROPERTY, "offset", 0, 1, 2, 0.01, DEFAULTS.offset).setter((data, value) => {
+      data.properties.offset = value;
+      data.vignettePass.uniforms["offset"].value = data.properties.offset;
+    }).getter((data) => data.properties.offset);
+    this.addPropertyNumber(GENERAL_PROPERTY, "darkness", 0, 1, 2, 0.01, DEFAULTS.darkness).setter((data, value) => {
+      data.properties.darkness = value;
+      data.vignettePass.uniforms["darkness"].value = data.properties.darkness;
+    }).getter((data) => data.properties.darkness);
   }
 }
 const digoAssetData = {
   info: {
     name: {
-      en: "Spot Light",
-      es: "Foco de Luz"
+      en: "Post Processing",
+      es: "PFX"
     },
     category: "objects",
     icon: "ViewInAr",
@@ -873,7 +866,7 @@ const digoAssetData = {
     }
   },
   create: (entities) => {
-    return new SpotLightDigo(entities || []);
+    return new PostProcessingDigo();
   }
 };
 Helper.loadAsset(digoAssetData);
