@@ -1,4 +1,4 @@
-import { B as BufferGeometry, a as BufferAttribute, L as LineSegments, b as LineBasicMaterial, c as BoxGeometry, S as SphereGeometry, I as IcosahedronGeometry, V as Vector3, Q as Quaternion, E as Euler, M as Mesh, d as MeshPhysicalMaterial, e as MeshBasicMaterial, f as Scene, g as Material, h as Matrix4, i as InstancedMesh, D as DynamicDrawUsage, j as MathUtils } from "./three.js";
+import { B as BufferGeometry, a as BufferAttribute, M as Material, b as Mesh, V as Vector3, c as Matrix4, L as LineSegments, d as LineBasicMaterial, e as BoxGeometry, S as SphereGeometry, I as IcosahedronGeometry, Q as Quaternion, E as Euler, f as MeshPhysicalMaterial, g as MeshBasicMaterial, h as Scene, i as InstancedMesh, D as DynamicDrawUsage, j as MathUtils } from "./three.js";
 (function polyfill() {
   const relList = document.createElement("link").relList;
   if (relList && relList.supports && relList.supports("modulepreload")) {
@@ -680,161 +680,6 @@ class DigoAssetThree extends Asset {
   }
   tick(parameters) {
   }
-}
-function mergeGeometries(geometries, useGroups = false) {
-  const isIndexed = geometries[0].index !== null;
-  const attributesUsed = new Set(Object.keys(geometries[0].attributes));
-  const morphAttributesUsed = new Set(Object.keys(geometries[0].morphAttributes));
-  const attributes = {};
-  const morphAttributes = {};
-  const morphTargetsRelative = geometries[0].morphTargetsRelative;
-  const mergedGeometry = new BufferGeometry();
-  let offset = 0;
-  for (let i2 = 0; i2 < geometries.length; ++i2) {
-    const geometry = geometries[i2];
-    let attributesCount = 0;
-    if (isIndexed !== (geometry.index !== null)) {
-      console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index " + i2 + ". All geometries must have compatible attributes; make sure index attribute exists among all geometries, or in none of them.");
-      return null;
-    }
-    for (const name in geometry.attributes) {
-      if (!attributesUsed.has(name)) {
-        console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index " + i2 + '. All geometries must have compatible attributes; make sure "' + name + '" attribute exists among all geometries, or in none of them.');
-        return null;
-      }
-      if (attributes[name] === void 0)
-        attributes[name] = [];
-      attributes[name].push(geometry.attributes[name]);
-      attributesCount++;
-    }
-    if (attributesCount !== attributesUsed.size) {
-      console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index " + i2 + ". Make sure all geometries have the same number of attributes.");
-      return null;
-    }
-    if (morphTargetsRelative !== geometry.morphTargetsRelative) {
-      console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index " + i2 + ". .morphTargetsRelative must be consistent throughout all geometries.");
-      return null;
-    }
-    for (const name in geometry.morphAttributes) {
-      if (!morphAttributesUsed.has(name)) {
-        console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index " + i2 + ".  .morphAttributes must be consistent throughout all geometries.");
-        return null;
-      }
-      if (morphAttributes[name] === void 0)
-        morphAttributes[name] = [];
-      morphAttributes[name].push(geometry.morphAttributes[name]);
-    }
-    if (useGroups) {
-      let count;
-      if (isIndexed) {
-        count = geometry.index.count;
-      } else if (geometry.attributes.position !== void 0) {
-        count = geometry.attributes.position.count;
-      } else {
-        console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index " + i2 + ". The geometry must have either an index or a position attribute");
-        return null;
-      }
-      mergedGeometry.addGroup(offset, count, i2);
-      offset += count;
-    }
-  }
-  if (isIndexed) {
-    let indexOffset = 0;
-    const mergedIndex = [];
-    for (let i2 = 0; i2 < geometries.length; ++i2) {
-      const index = geometries[i2].index;
-      for (let j2 = 0; j2 < index.count; ++j2) {
-        mergedIndex.push(index.getX(j2) + indexOffset);
-      }
-      indexOffset += geometries[i2].attributes.position.count;
-    }
-    mergedGeometry.setIndex(mergedIndex);
-  }
-  for (const name in attributes) {
-    const mergedAttribute = mergeAttributes(attributes[name]);
-    if (!mergedAttribute) {
-      console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed while trying to merge the " + name + " attribute.");
-      return null;
-    }
-    mergedGeometry.setAttribute(name, mergedAttribute);
-  }
-  for (const name in morphAttributes) {
-    const numMorphTargets = morphAttributes[name][0].length;
-    if (numMorphTargets === 0)
-      break;
-    mergedGeometry.morphAttributes = mergedGeometry.morphAttributes || {};
-    mergedGeometry.morphAttributes[name] = [];
-    for (let i2 = 0; i2 < numMorphTargets; ++i2) {
-      const morphAttributesToMerge = [];
-      for (let j2 = 0; j2 < morphAttributes[name].length; ++j2) {
-        morphAttributesToMerge.push(morphAttributes[name][j2][i2]);
-      }
-      const mergedMorphAttribute = mergeAttributes(morphAttributesToMerge);
-      if (!mergedMorphAttribute) {
-        console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed while trying to merge the " + name + " morphAttribute.");
-        return null;
-      }
-      mergedGeometry.morphAttributes[name].push(mergedMorphAttribute);
-    }
-  }
-  return mergedGeometry;
-}
-function mergeAttributes(attributes) {
-  let TypedArray;
-  let itemSize;
-  let normalized;
-  let gpuType = -1;
-  let arrayLength = 0;
-  for (let i2 = 0; i2 < attributes.length; ++i2) {
-    const attribute = attributes[i2];
-    if (TypedArray === void 0)
-      TypedArray = attribute.array.constructor;
-    if (TypedArray !== attribute.array.constructor) {
-      console.error("THREE.BufferGeometryUtils: .mergeAttributes() failed. BufferAttribute.array must be of consistent array types across matching attributes.");
-      return null;
-    }
-    if (itemSize === void 0)
-      itemSize = attribute.itemSize;
-    if (itemSize !== attribute.itemSize) {
-      console.error("THREE.BufferGeometryUtils: .mergeAttributes() failed. BufferAttribute.itemSize must be consistent across matching attributes.");
-      return null;
-    }
-    if (normalized === void 0)
-      normalized = attribute.normalized;
-    if (normalized !== attribute.normalized) {
-      console.error("THREE.BufferGeometryUtils: .mergeAttributes() failed. BufferAttribute.normalized must be consistent across matching attributes.");
-      return null;
-    }
-    if (gpuType === -1)
-      gpuType = attribute.gpuType;
-    if (gpuType !== attribute.gpuType) {
-      console.error("THREE.BufferGeometryUtils: .mergeAttributes() failed. BufferAttribute.gpuType must be consistent across matching attributes.");
-      return null;
-    }
-    arrayLength += attribute.count * itemSize;
-  }
-  const array = new TypedArray(arrayLength);
-  const result = new BufferAttribute(array, itemSize, normalized);
-  let offset = 0;
-  for (let i2 = 0; i2 < attributes.length; ++i2) {
-    const attribute = attributes[i2];
-    if (attribute.isInterleavedBufferAttribute) {
-      const tupleOffset = offset / itemSize;
-      for (let j2 = 0, l2 = attribute.count; j2 < l2; j2++) {
-        for (let c2 = 0; c2 < itemSize; c2++) {
-          const value = attribute.getComponent(j2, c2);
-          result.setComponent(j2 + tupleOffset, c2, value);
-        }
-      }
-    } else {
-      array.set(attribute.array, offset);
-    }
-    offset += attribute.count * itemSize;
-  }
-  if (gpuType !== void 0) {
-    result.gpuType = gpuType;
-  }
-  return result;
 }
 let A;
 const I = new Array(128).fill(void 0);
@@ -5814,6 +5659,187 @@ var Bg = Object.freeze({ __proto__: null, version: Cg, Vector3: GA, VectorOps: w
 }, DebugRenderBuffers: dI, DebugRenderPipeline: TI, get QueryFilterFlags() {
   return sA;
 }, QueryPipeline: eI, init: gg, CharacterCollision: OI, KinematicCharacterController: nI, DynamicRayCastVehicleController: ZI });
+function mergeGeometries(geometries, useGroups = false) {
+  const isIndexed = geometries[0].index !== null;
+  const attributesUsed = new Set(Object.keys(geometries[0].attributes));
+  const morphAttributesUsed = new Set(Object.keys(geometries[0].morphAttributes));
+  const attributes = {};
+  const morphAttributes = {};
+  const morphTargetsRelative = geometries[0].morphTargetsRelative;
+  const mergedGeometry = new BufferGeometry();
+  let offset = 0;
+  for (let i2 = 0; i2 < geometries.length; ++i2) {
+    const geometry = geometries[i2];
+    let attributesCount = 0;
+    if (isIndexed !== (geometry.index !== null)) {
+      console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index " + i2 + ". All geometries must have compatible attributes; make sure index attribute exists among all geometries, or in none of them.");
+      return null;
+    }
+    for (const name in geometry.attributes) {
+      if (!attributesUsed.has(name)) {
+        console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index " + i2 + '. All geometries must have compatible attributes; make sure "' + name + '" attribute exists among all geometries, or in none of them.');
+        return null;
+      }
+      if (attributes[name] === void 0)
+        attributes[name] = [];
+      attributes[name].push(geometry.attributes[name]);
+      attributesCount++;
+    }
+    if (attributesCount !== attributesUsed.size) {
+      console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index " + i2 + ". Make sure all geometries have the same number of attributes.");
+      return null;
+    }
+    if (morphTargetsRelative !== geometry.morphTargetsRelative) {
+      console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index " + i2 + ". .morphTargetsRelative must be consistent throughout all geometries.");
+      return null;
+    }
+    for (const name in geometry.morphAttributes) {
+      if (!morphAttributesUsed.has(name)) {
+        console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index " + i2 + ".  .morphAttributes must be consistent throughout all geometries.");
+        return null;
+      }
+      if (morphAttributes[name] === void 0)
+        morphAttributes[name] = [];
+      morphAttributes[name].push(geometry.morphAttributes[name]);
+    }
+    if (useGroups) {
+      let count;
+      if (isIndexed) {
+        count = geometry.index.count;
+      } else if (geometry.attributes.position !== void 0) {
+        count = geometry.attributes.position.count;
+      } else {
+        console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index " + i2 + ". The geometry must have either an index or a position attribute");
+        return null;
+      }
+      mergedGeometry.addGroup(offset, count, i2);
+      offset += count;
+    }
+  }
+  if (isIndexed) {
+    let indexOffset = 0;
+    const mergedIndex = [];
+    for (let i2 = 0; i2 < geometries.length; ++i2) {
+      const index = geometries[i2].index;
+      for (let j2 = 0; j2 < index.count; ++j2) {
+        mergedIndex.push(index.getX(j2) + indexOffset);
+      }
+      indexOffset += geometries[i2].attributes.position.count;
+    }
+    mergedGeometry.setIndex(mergedIndex);
+  }
+  for (const name in attributes) {
+    const mergedAttribute = mergeAttributes(attributes[name]);
+    if (!mergedAttribute) {
+      console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed while trying to merge the " + name + " attribute.");
+      return null;
+    }
+    mergedGeometry.setAttribute(name, mergedAttribute);
+  }
+  for (const name in morphAttributes) {
+    const numMorphTargets = morphAttributes[name][0].length;
+    if (numMorphTargets === 0)
+      break;
+    mergedGeometry.morphAttributes = mergedGeometry.morphAttributes || {};
+    mergedGeometry.morphAttributes[name] = [];
+    for (let i2 = 0; i2 < numMorphTargets; ++i2) {
+      const morphAttributesToMerge = [];
+      for (let j2 = 0; j2 < morphAttributes[name].length; ++j2) {
+        morphAttributesToMerge.push(morphAttributes[name][j2][i2]);
+      }
+      const mergedMorphAttribute = mergeAttributes(morphAttributesToMerge);
+      if (!mergedMorphAttribute) {
+        console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed while trying to merge the " + name + " morphAttribute.");
+        return null;
+      }
+      mergedGeometry.morphAttributes[name].push(mergedMorphAttribute);
+    }
+  }
+  return mergedGeometry;
+}
+function mergeAttributes(attributes) {
+  let TypedArray;
+  let itemSize;
+  let normalized;
+  let gpuType = -1;
+  let arrayLength = 0;
+  for (let i2 = 0; i2 < attributes.length; ++i2) {
+    const attribute = attributes[i2];
+    if (TypedArray === void 0)
+      TypedArray = attribute.array.constructor;
+    if (TypedArray !== attribute.array.constructor) {
+      console.error("THREE.BufferGeometryUtils: .mergeAttributes() failed. BufferAttribute.array must be of consistent array types across matching attributes.");
+      return null;
+    }
+    if (itemSize === void 0)
+      itemSize = attribute.itemSize;
+    if (itemSize !== attribute.itemSize) {
+      console.error("THREE.BufferGeometryUtils: .mergeAttributes() failed. BufferAttribute.itemSize must be consistent across matching attributes.");
+      return null;
+    }
+    if (normalized === void 0)
+      normalized = attribute.normalized;
+    if (normalized !== attribute.normalized) {
+      console.error("THREE.BufferGeometryUtils: .mergeAttributes() failed. BufferAttribute.normalized must be consistent across matching attributes.");
+      return null;
+    }
+    if (gpuType === -1)
+      gpuType = attribute.gpuType;
+    if (gpuType !== attribute.gpuType) {
+      console.error("THREE.BufferGeometryUtils: .mergeAttributes() failed. BufferAttribute.gpuType must be consistent across matching attributes.");
+      return null;
+    }
+    arrayLength += attribute.count * itemSize;
+  }
+  const array = new TypedArray(arrayLength);
+  const result = new BufferAttribute(array, itemSize, normalized);
+  let offset = 0;
+  for (let i2 = 0; i2 < attributes.length; ++i2) {
+    const attribute = attributes[i2];
+    if (attribute.isInterleavedBufferAttribute) {
+      const tupleOffset = offset / itemSize;
+      for (let j2 = 0, l2 = attribute.count; j2 < l2; j2++) {
+        for (let c2 = 0; c2 < itemSize; c2++) {
+          const value = attribute.getComponent(j2, c2);
+          result.setComponent(j2 + tupleOffset, c2, value);
+        }
+      }
+    } else {
+      array.set(attribute.array, offset);
+    }
+    offset += attribute.count * itemSize;
+  }
+  if (gpuType !== void 0) {
+    result.gpuType = gpuType;
+  }
+  return result;
+}
+function getModelMesh(id, desiredSize, onLoad) {
+  Helper.getGlobal().loadGLTF(id, (gltf) => {
+    const geometries = [];
+    let material = new Material();
+    gltf.scene.traverse((node) => {
+      if (node instanceof Mesh) {
+        const mesh = node;
+        const geometry = mesh.geometry.clone();
+        geometry.applyMatrix4(mesh.matrixWorld);
+        geometries.push(geometry);
+        material = mesh.material;
+      }
+    });
+    const mergedGeometry = mergeGeometries(geometries);
+    mergedGeometry.computeVertexNormals();
+    mergedGeometry.computeBoundingSphere();
+    mergedGeometry.computeTangents();
+    mergedGeometry.computeBoundingBox();
+    const size = mergedGeometry.boundingBox.getSize(new Vector3());
+    const scaleFactor = 1 / Math.max(size.x, size.y, size.z);
+    const scaleMatrix = new Matrix4().makeScale(scaleFactor, scaleFactor, scaleFactor);
+    mergedGeometry.applyMatrix4(scaleMatrix);
+    mergedGeometry.scale(desiredSize, desiredSize, desiredSize);
+    onLoad(new Mesh(mergedGeometry, material));
+  });
+}
 class RapierUtils {
   constructor(scene, world, rapier) {
     this.mesh = new LineSegments(new BufferGeometry(), new LineBasicMaterial({ color: 16777215, vertexColors: true }));
@@ -6368,7 +6394,7 @@ class Thrower extends DigoAssetThree {
     this.addPropertyMaterial(ENTITY_PROPERTY, "material", DEFAULTS.material).group("mesh").setter((data, value, property) => this.updateMaterial(data, data.properties, "material", property, value)).getter((data) => data.properties.material);
   }
   addPhysicsProperties() {
-    this.addPropertyNumber(ENTITY_PROPERTY, "size", 0.01, 100, 2, 0.01, DEFAULTS.size).group("physics").setter((data, value) => {
+    this.addPropertyNumber(ENTITY_PROPERTY, "size", 0.01, Infinity, 2, 0.01, DEFAULTS.size).group("physics").setter((data, value) => {
       data.instancedMesh.geometry.scale(1 / data.properties.size, 1 / data.properties.size, 1 / data.properties.size);
       data.properties.size = value;
       data.instancedMesh.geometry.scale(data.properties.size, data.properties.size, data.properties.size);
@@ -6380,13 +6406,13 @@ class Thrower extends DigoAssetThree {
     this.addPropertyNumber(ENTITY_PROPERTY, "mass", 0, 100, 2, 0.01, DEFAULTS.mass).group("physics").setter((data, value) => {
       data.properties.mass = value;
     }).getter((data) => data.properties.mass);
-    this.addPropertyNumber(ENTITY_PROPERTY, "angularInertia", 0, 2, 2, 0.01, DEFAULTS.angularInertia).group("physics").setter((data, value) => {
+    this.addPropertyNumber(ENTITY_PROPERTY, "angularInertia", 0, Infinity, 2, 0.01, DEFAULTS.angularInertia).group("physics").setter((data, value) => {
       data.properties.angularInertia = value / DEFAULTS.angularInertiaMultiplier;
     }).getter((data) => data.properties.angularInertia * DEFAULTS.angularInertiaMultiplier);
-    this.addPropertyNumber(ENTITY_PROPERTY, "linearDamping", 0, 100, 2, 0.01, DEFAULTS.linearDamping).group("physics").setter((data, value) => {
+    this.addPropertyNumber(ENTITY_PROPERTY, "linearDamping", 0, Infinity, 2, 0.01, DEFAULTS.linearDamping).group("physics").setter((data, value) => {
       data.properties.linearDamping = value;
     }).getter((data) => data.properties.linearDamping);
-    this.addPropertyNumber(ENTITY_PROPERTY, "angularDamping", 0, 100, 2, 0.01, DEFAULTS.angularDamping).group("physics").setter((data, value) => {
+    this.addPropertyNumber(ENTITY_PROPERTY, "angularDamping", 0, Infinity, 2, 0.01, DEFAULTS.angularDamping).group("physics").setter((data, value) => {
       data.properties.angularDamping = value;
     }).getter((data) => data.properties.angularDamping);
     this.addPropertyNumber(ENTITY_PROPERTY, "friction", 0, 10, 2, 0.01, DEFAULTS.friction).group("physics").setter((data, value) => {
@@ -6399,28 +6425,9 @@ class Thrower extends DigoAssetThree {
   updateGeometry(entityData) {
     switch (entityData.properties.meshType) {
       case MESH_TYPE_KEYS[2]:
-        this.loadGLTF(entityData.properties.objectId, (gltf) => {
-          const geometries = [];
-          let material = new Material();
-          gltf.scene.traverse((node) => {
-            if (node instanceof Mesh) {
-              const mesh = node;
-              geometries.push(mesh.geometry);
-              material = node.material;
-            }
-          });
-          const mergedGeometry = mergeGeometries(geometries);
-          mergedGeometry.computeVertexNormals();
-          mergedGeometry.computeBoundingSphere();
-          mergedGeometry.computeTangents();
-          mergedGeometry.computeBoundingBox();
-          const size = mergedGeometry.boundingBox.getSize(new Vector3());
-          const scaleFactor = 1 / Math.max(size.x, size.y, size.z) / 10;
-          const scaleMatrix = new Matrix4().makeScale(scaleFactor, scaleFactor, scaleFactor);
-          mergedGeometry.applyMatrix4(scaleMatrix);
-          mergedGeometry.scale(entityData.properties.size, entityData.properties.size, entityData.properties.size);
-          entityData.instancedMesh.geometry = mergedGeometry;
-          entityData.originalMaterial = material;
+        getModelMesh(entityData.properties.objectId, entityData.properties.size / 10, (mesh2) => {
+          entityData.instancedMesh.geometry = mesh2.geometry;
+          entityData.originalMaterial = mesh2.material;
           entityData.setCustomMaterial(entityData.properties.customMaterial);
         });
         break;
