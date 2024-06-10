@@ -1202,7 +1202,9 @@ class EntityData extends AssetEntityData {
     let instanceIndex = 0;
     for (let i = 0; i < x; i++) {
       for (let j = 0; j < y; j++) {
-        instanceUV.set([i / (x - 1), j / (y - 1), instanceIndex + 1], instanceIndex * 3);
+        const u = x === 1 ? 0 : i / (x - 1);
+        const v = y === 1 ? 0 : j / (y - 1);
+        instanceUV.set([u, v, instanceIndex + 1], instanceIndex * 3);
         dummy.position.set(
           w * (i + 0.5 - x / 2),
           0,
@@ -1281,6 +1283,7 @@ class EntityData extends AssetEntityData {
         float displacement = 0.0;
         
         if (uGrowIndex == 0){
+          
           float firstActiveInstance = uPercentage * uColumns * uRows / 100.0;
 
           float firstActiveInstanceFraction = fract(firstActiveInstance);
