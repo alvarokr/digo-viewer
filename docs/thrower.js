@@ -5899,12 +5899,7 @@ class RapierUtils {
     return void 0;
   }
   addInstancePhysics(instancedMesh, index) {
-    const scaledMeshGeometry = new BufferGeometry();
-    scaledMeshGeometry.copy(instancedMesh.geometry);
-    const scale = new Vector3();
-    instancedMesh.getWorldScale(scale);
-    scaledMeshGeometry.scale(scale.x, scale.y, scale.z);
-    const colliderDesc = this.getColliderDesc(scaledMeshGeometry);
+    const colliderDesc = this.getColliderDesc(instancedMesh.geometry);
     const rigidBody = this.createInstanceRigidBody(instancedMesh, index);
     const collider = this.createCollider(colliderDesc, rigidBody);
     const instancePhysics = {
@@ -6311,6 +6306,31 @@ class EntityData extends AssetEntityData {
     rigidBody.setAngularDamping(this.properties.angularDamping);
     rigidBody.setLinearDamping(this.properties.linearDamping);
   }
+  updateGeometry() {
+    const previousSize = this.properties.size;
+    const scaleFactor = this.properties.size / previousSize;
+    switch (this.properties.meshType) {
+      case MESH_TYPE_KEYS[2]:
+        getModelMesh(this.properties.objectId, this.properties.size / 10, (mesh2) => {
+          this.instancedMesh.geometry = mesh2.geometry;
+          this.originalMaterial = mesh2.material;
+          this.setCustomMaterial(this.properties.customMaterial);
+          const scaleFactor2 = this.properties.size / previousSize;
+          this.instancedMesh.geometry.scale(scaleFactor2, scaleFactor2, scaleFactor2);
+        });
+        break;
+      default:
+        meshTypeOptions[this.properties.meshType].geometry.computeVertexNormals();
+        meshTypeOptions[this.properties.meshType].geometry.computeBoundingSphere();
+        meshTypeOptions[this.properties.meshType].geometry.computeTangents();
+        meshTypeOptions[this.properties.meshType].geometry.computeBoundingBox();
+        this.instancedMesh.geometry = meshTypeOptions[this.properties.meshType].geometry;
+        this.originalMaterial = meshTypeOptions[this.properties.meshType].material;
+        this.setCustomMaterial(this.properties.customMaterial);
+        this.instancedMesh.geometry.scale(scaleFactor, scaleFactor, scaleFactor);
+        break;
+    }
+  }
 }
 class Thrower extends DigoAssetThree {
   constructor(entities) {
@@ -6386,11 +6406,11 @@ class Thrower extends DigoAssetThree {
   addMeshProperties() {
     this.addPropertyDropdown(ENTITY_PROPERTY, "meshType", DEFAULTS.meshType, MESH_TYPE_KEYS).group("mesh").setter((data, value) => {
       data.properties.meshType = value;
-      this.updateGeometry(data);
+      data.updateGeometry();
     }).getter((data) => data.properties.meshType);
     this.addPropertyObject3D(ENTITY_PROPERTY, "geometry").group("mesh").setter((data, value) => {
       data.properties.objectId = value;
-      this.updateGeometry(data);
+      data.updateGeometry();
     }).getter((data) => data.properties.objectId);
     this.addPropertyBoolean(ENTITY_PROPERTY, "customMaterial", DEFAULTS.customMaterial).group("mesh").setter((data, value) => {
       data.properties.customMaterial = value;
@@ -6426,26 +6446,6 @@ class Thrower extends DigoAssetThree {
     this.addPropertyNumber(ENTITY_PROPERTY, "restitution", 0, 10, 2, 0.01, DEFAULTS.restitution).group("physics").setter((data, value) => {
       data.properties.restitution = value;
     }).getter((data) => data.properties.restitution);
-  }
-  updateGeometry(entityData) {
-    switch (entityData.properties.meshType) {
-      case MESH_TYPE_KEYS[2]:
-        getModelMesh(entityData.properties.objectId, entityData.properties.size / 10, (mesh2) => {
-          entityData.instancedMesh.geometry = mesh2.geometry;
-          entityData.originalMaterial = mesh2.material;
-          entityData.setCustomMaterial(entityData.properties.customMaterial);
-        });
-        break;
-      default:
-        meshTypeOptions[entityData.properties.meshType].geometry.computeVertexNormals();
-        meshTypeOptions[entityData.properties.meshType].geometry.computeBoundingSphere();
-        meshTypeOptions[entityData.properties.meshType].geometry.computeTangents();
-        meshTypeOptions[entityData.properties.meshType].geometry.computeBoundingBox();
-        entityData.instancedMesh.geometry = meshTypeOptions[entityData.properties.meshType].geometry;
-        entityData.originalMaterial = meshTypeOptions[entityData.properties.meshType].material;
-        entityData.setCustomMaterial(entityData.properties.customMaterial);
-        break;
-    }
   }
   tick(parameters) {
     this.deltaTime = parameters.elapsedTime - this.previousTime;
