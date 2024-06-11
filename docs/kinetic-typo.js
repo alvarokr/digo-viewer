@@ -1,4 +1,4 @@
-import { L as Loader, F as FileLoader, S as ShapePath, E as ExtrudeGeometry, M as MathUtils, a as Material, U as Uniform, T as Texture, b as TorusKnotGeometry, c as Scene, C as Color, d as Mesh, B as BufferGeometry, e as MeshBasicMaterial, f as MeshPhysicalMaterial, W as WebGLRenderTarget, O as OrthographicCamera, V as Vector3, D as DoubleSide } from "./three.js";
+import { L as Loader, F as FileLoader, S as ShapePath, E as ExtrudeGeometry, M as MathUtils, a as Material, b as Scene, C as Color, U as Uniform, T as Texture, c as TorusKnotGeometry, d as Mesh, B as BufferGeometry, e as MeshBasicMaterial, f as MeshPhysicalMaterial, W as WebGLRenderTarget, O as OrthographicCamera, V as Vector3, D as DoubleSide } from "./three.js";
 (function polyfill() {
   const relList = document.createElement("link").relList;
   if (relList && relList.supports && relList.supports("modulepreload")) {
@@ -56,6 +56,10 @@ class Helper {
         loadResourceAsBase64: async (id) => "",
         loadGLTF: (id, onLoad) => {
         },
+        loadTexture: (id, onLoad) => {
+        },
+        loadRGBE: (id, onLoad) => {
+        },
         getResourceURL: (id) => "",
         forceRefresh: () => {
         },
@@ -68,6 +72,16 @@ class Helper {
         getMIDINotesVelocity: (input) => [],
         getMIDIControlsVelocity: (input) => [],
         getThreeWebGLRenderer: () => {
+        },
+        getThreeCamera: () => {
+        },
+        getThreeScene: () => {
+        },
+        getThreeOrbitControls: () => {
+        },
+        getRapierWorld: () => {
+        },
+        getRapierInstance: () => {
         },
         updateMaterial: (mesh, property, value, previousValue) => {
         },
@@ -343,6 +357,16 @@ class Asset {
     };
     return this.addProperty(general, property);
   }
+  addPropertyDropdown(general, id, defaultValue, keys) {
+    const property = {
+      id,
+      type: "dropdown",
+      defaultValue,
+      general,
+      keys
+    };
+    return this.addProperty(general, property);
+  }
   addPropertyPosition(general) {
     return this.addPropertyXYZ(
       general,
@@ -514,6 +538,7 @@ class Asset {
   }
   tick(parameters) {
   }
+  // Rapier utility functions. TO REVIEW
 }
 class DigoAssetThree extends Asset {
   getContainer() {
@@ -628,6 +653,14 @@ class DigoAssetThree extends Asset {
   loadGLTF(id, onLoad) {
     var _a;
     (_a = Helper.getGlobal()) == null ? void 0 : _a.loadGLTF(id, onLoad);
+  }
+  loadTexture(id, onLoad) {
+    var _a;
+    (_a = Helper.getGlobal()) == null ? void 0 : _a.loadTexture(id, onLoad);
+  }
+  loadRGBE(id, onLoad) {
+    var _a;
+    (_a = Helper.getGlobal()) == null ? void 0 : _a.loadRGBE(id, onLoad);
   }
   updateMaterial(mesh, object, field, property, value) {
     var _a;
@@ -769,7 +802,7 @@ class TextGeometry extends ExtrudeGeometry {
   }
 }
 var torus_vertex_default = "varying vec2 vUv;\nvarying vec3 vPosition;\n\nuniform float uTime;\n\nvoid main() {\n  vUv = uv;\n  vPosition = position;\n  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.);\n}";
-var torus_fragment_default = "varying vec2 vUv;\nvarying vec3 vPosition;\n\nuniform float uTime;\nuniform float uSpeed;\nuniform sampler2D uTexture;\nuniform float uRepeatX;\nuniform float uRepeatY;\n\nvoid main() {\n  float time = uTime * uSpeed;\n\n  vec2 repeat = -vec2(uRepeatX, uRepeatY);\n  vec2 uv = fract(vUv * repeat - vec2(time, 0.));\n  csm_DiffuseColor = texture2D(uTexture, uv);\n  \n}";
+var torus_fragment_default = "varying vec2 vUv;\nvarying vec3 vPosition;\n\nuniform float uTime;\nuniform float uSpeed;\nuniform sampler2D uTexture;\nuniform float uRepeatX;\nuniform float uRepeatY;\n\nvoid main() {\n  float time = uTime * uSpeed * -1.0;\n\n  vec2 repeat = -vec2(uRepeatX, uRepeatY);\n  vec2 uv = fract(vUv * repeat - vec2(time, 0.));\n  csm_DiffuseColor = texture2D(uTexture, uv);\n  \n}";
 const glyphs = {
   "0": {
     x_min: 73,
@@ -4451,50 +4484,58 @@ const labels = {
     es: "Palabra"
   }
 };
-const defaultProperties = {
-  uniforms: {
-    time: new Uniform(0),
-    texture: new Uniform(new Texture()),
-    speed: new Uniform(0.4),
-    repeatX: new Uniform(1),
-    repeatY: new Uniform(3)
-  },
-  torus: {
-    radius: 1,
-    tube: 0.32,
-    tubularSegments: 740,
-    radialSegments: 3,
-    p: 4,
-    q: 3
-  },
-  text: {
-    word: "ENDLESS",
-    color: 16777215,
-    size: 1,
-    fontFile: "assets/kinetic-typo/fonts/helvetiker-regular.typeface.json"
-  },
-  mesh: {
-    color: 16711680,
-    geometry: new TorusKnotGeometry(1, 0.32, 740, 3, 4, 3),
-    metalness: 0,
-    roughness: 0,
-    vertexShader: torus_vertex_default,
-    fragmentShader: torus_fragment_default
-  }
+const DEFAULTS = {
+  time: 0,
+  speed: 0.4,
+  repeatX: 1,
+  repeatY: 3,
+  radius: 1,
+  tube: 0.32,
+  tubularSegments: 740,
+  radialSegments: 3,
+  p: 4,
+  q: 3,
+  word: "ENDLESS",
+  textColor: 16777215,
+  textSize: 1,
+  fontFile: "assets/kinetic-typo/fonts/helvetiker-regular.typeface.json",
+  meshColor: 16711680,
+  metalness: 0,
+  roughness: 0
 };
 class GeneralData extends AssetGeneralData {
 }
 class EntityData extends AssetEntityData {
   constructor() {
     super(...arguments);
-    this.properties = defaultProperties;
-    this.webGLRenderer = Helper.getGlobal().getThreeWebGLRenderer();
+    this.properties = {
+      time: new Uniform(DEFAULTS.time),
+      texture: new Uniform(new Texture()),
+      speed: new Uniform(DEFAULTS.speed),
+      repeatX: new Uniform(DEFAULTS.repeatX),
+      repeatY: new Uniform(DEFAULTS.repeatY),
+      radius: DEFAULTS.radius,
+      tube: DEFAULTS.tube,
+      tubularSegments: DEFAULTS.tubularSegments,
+      radialSegments: DEFAULTS.radialSegments,
+      p: DEFAULTS.p,
+      q: DEFAULTS.q,
+      word: DEFAULTS.word,
+      textColor: DEFAULTS.textColor,
+      textSize: DEFAULTS.textSize,
+      fontFile: DEFAULTS.fontFile,
+      meshColor: DEFAULTS.meshColor,
+      geometry: new TorusKnotGeometry(1, 0.32, 740, 3, 4, 3),
+      metalness: DEFAULTS.metalness,
+      roughness: DEFAULTS.roughness,
+      vertexShader: torus_vertex_default,
+      fragmentShader: torus_fragment_default
+    };
     this.fontLoader = new FontLoader();
-    this.textMesh = new Mesh(new BufferGeometry(), new MeshBasicMaterial({ color: new Color(this.properties.text.color) }));
+    this.textMesh = new Mesh(new BufferGeometry(), new MeshBasicMaterial({ color: new Color(this.properties.textColor) }));
     this.mesh = new Mesh(new BufferGeometry(), new CustomShaderMaterial({ baseMaterial: new MeshPhysicalMaterial() }));
     this.renderTarget = {
       rt: new WebGLRenderTarget(window.innerWidth, window.innerHeight),
-      // camera: new Three.PerspectiveCamera(45, 1, 0.1, 1000),
       camera: new OrthographicCamera(),
       scene: new Scene()
     };
@@ -4515,8 +4556,8 @@ class EntityData extends AssetEntityData {
   }
   setRenderTargetScene() {
     this.renderTarget.camera.position.z = 1;
-    this.renderTarget.scene.background = new Color(this.properties.mesh.color);
-    this.properties.uniforms.texture.value = this.renderTarget.rt.texture;
+    this.renderTarget.scene.background = new Color(this.properties.meshColor);
+    this.properties.texture.value = this.renderTarget.rt.texture;
     this.renderTarget.scene.add(this.textMesh);
   }
   updateTextGeometry() {
@@ -4525,15 +4566,7 @@ class EntityData extends AssetEntityData {
       this.textMesh.geometry.dispose();
     }
     const font = this.fontLoader.parse(fontJSON);
-    const geometry = new TextGeometry(
-      this.properties.text.word,
-      {
-        font,
-        size: 1,
-        depth: 0,
-        curveSegments: 10
-      }
-    );
+    const geometry = new TextGeometry(this.properties.word, { font, size: 1, depth: 0, curveSegments: 10 });
     geometry.center();
     this.textMesh.geometry = geometry;
     this.updateSize();
@@ -4543,7 +4576,7 @@ class EntityData extends AssetEntityData {
     if ((_a = this.mesh) == null ? void 0 : _a.geometry) {
       this.mesh.geometry.dispose();
     }
-    const geometry = new TorusKnotGeometry(this.properties.torus.radius, this.properties.torus.tube, this.properties.torus.tubularSegments, this.properties.torus.radialSegments, this.properties.torus.p, this.properties.torus.q);
+    const geometry = new TorusKnotGeometry(this.properties.radius, this.properties.tube, this.properties.tubularSegments, this.properties.radialSegments, this.properties.p, this.properties.q);
     this.mesh.geometry = geometry;
   }
   updateSize() {
@@ -4560,20 +4593,20 @@ class EntityData extends AssetEntityData {
   }
   updateMeshMaterial() {
     const material = new CustomShaderMaterial({
-      vertexShader: this.properties.mesh.vertexShader,
-      fragmentShader: this.properties.mesh.fragmentShader,
+      vertexShader: this.properties.vertexShader,
+      fragmentShader: this.properties.fragmentShader,
       uniforms: {
-        uTime: this.properties.uniforms.time,
-        uTexture: this.properties.uniforms.texture,
-        uSpeed: this.properties.uniforms.speed,
-        uRepeatX: this.properties.uniforms.repeatX,
-        uRepeatY: this.properties.uniforms.repeatY
+        uTime: this.properties.time,
+        uTexture: this.properties.texture,
+        uSpeed: this.properties.speed,
+        uRepeatX: this.properties.repeatX,
+        uRepeatY: this.properties.repeatY
       },
       defines: { PI: Math.PI },
       silent: true,
       baseMaterial: MeshPhysicalMaterial,
-      metalness: this.properties.mesh.metalness,
-      roughness: this.properties.mesh.roughness,
+      metalness: this.properties.metalness,
+      roughness: this.properties.roughness,
       side: DoubleSide
     });
     this.mesh.material = material;
@@ -4603,68 +4636,68 @@ class KineticTypo extends DigoAssetThree {
     this.getContainer().add(mesh);
   }
   addTorusProperties() {
-    this.addPropertyNumber(ENTITY_PROPERTY, "radius", 0, 10, 2, 0.01, defaultProperties.torus.radius).group("torus").setter((data, value) => {
-      data.properties.torus.radius = value;
+    this.addPropertyNumber(ENTITY_PROPERTY, "radius", 0, 10, 2, 0.01, DEFAULTS.radius).group("torus").setter((data, value) => {
+      data.properties.radius = value;
       data.updateMeshGeometry();
-    }).getter((data) => data.properties.torus.radius);
-    this.addPropertyNumber(ENTITY_PROPERTY, "tube", 0, 2, 2, 0.01, defaultProperties.torus.tube).group("torus").setter((data, value) => {
-      data.properties.torus.tube = value;
+    }).getter((data) => data.properties.radius);
+    this.addPropertyNumber(ENTITY_PROPERTY, "tube", 0, 2, 2, 0.01, DEFAULTS.tube).group("torus").setter((data, value) => {
+      data.properties.tube = value;
       data.updateMeshGeometry();
-    }).getter((data) => data.properties.torus.tube);
-    this.addPropertyNumber(ENTITY_PROPERTY, "tubularSegments", 3, 1e3, 0, 0.1, defaultProperties.torus.tubularSegments).group("torus").setter((data, value) => {
-      data.properties.torus.tubularSegments = value;
+    }).getter((data) => data.properties.tube);
+    this.addPropertyNumber(ENTITY_PROPERTY, "tubularSegments", 3, 1e3, 0, 0.1, DEFAULTS.tubularSegments).group("torus").setter((data, value) => {
+      data.properties.tubularSegments = value;
       data.updateMeshGeometry();
-    }).getter((data) => data.properties.torus.tubularSegments);
-    this.addPropertyNumber(ENTITY_PROPERTY, "radialSegments", 3, 1e3, 0, 0.1, defaultProperties.torus.radialSegments).group("torus").setter((data, value) => {
-      data.properties.torus.radialSegments = value;
+    }).getter((data) => data.properties.tubularSegments);
+    this.addPropertyNumber(ENTITY_PROPERTY, "radialSegments", 3, 1e3, 0, 0.1, DEFAULTS.radialSegments).group("torus").setter((data, value) => {
+      data.properties.radialSegments = value;
       data.updateMeshGeometry();
-    }).getter((data) => data.properties.torus.radialSegments);
-    this.addPropertyNumber(ENTITY_PROPERTY, "p", 1, 100, 0, 1, defaultProperties.torus.p).group("torus").setter((data, value) => {
-      data.properties.torus.p = value;
+    }).getter((data) => data.properties.radialSegments);
+    this.addPropertyNumber(ENTITY_PROPERTY, "p", 1, 100, 0, 1, DEFAULTS.p).group("torus").setter((data, value) => {
+      data.properties.p = value;
       data.updateMeshGeometry();
-    }).getter((data) => data.properties.torus.p);
-    this.addPropertyNumber(ENTITY_PROPERTY, "q", 0, 100, 0, 1, defaultProperties.torus.q).group("torus").setter((data, value) => {
-      data.properties.torus.q = value;
+    }).getter((data) => data.properties.p);
+    this.addPropertyNumber(ENTITY_PROPERTY, "q", 0, 100, 0, 1, DEFAULTS.q).group("torus").setter((data, value) => {
+      data.properties.q = value;
       data.updateMeshGeometry();
-    }).getter((data) => data.properties.torus.q);
+    }).getter((data) => data.properties.q);
   }
   addTextProperties() {
-    this.addPropertyString(ENTITY_PROPERTY, "word", defaultProperties.text.word).group("text").setter((data, value) => {
-      data.properties.text.word = value;
+    this.addPropertyString(ENTITY_PROPERTY, "word", DEFAULTS.word).group("text").setter((data, value) => {
+      data.properties.word = value;
       data.updateTextGeometry();
-    }).getter((data) => data.properties.text.word);
-    this.addPropertyNumber(ENTITY_PROPERTY, "size", 0, 1, 2, 0.01, defaultProperties.text.size).group("text").setter((data, value) => {
-      data.properties.text.size = value;
+    }).getter((data) => data.properties.word);
+    this.addPropertyNumber(ENTITY_PROPERTY, "size", 0, 1, 2, 0.01, DEFAULTS.textSize).group("text").setter((data, value) => {
+      data.properties.textSize = value;
       data.updateSize();
-    }).getter((data) => data.properties.text.size);
-    this.addPropertyColor(ENTITY_PROPERTY, "textColor", defaultProperties.text.color).group("text").setter((data, value) => {
+    }).getter((data) => data.properties.textSize);
+    this.addPropertyColor(ENTITY_PROPERTY, "textColor", DEFAULTS.textColor).group("text").setter((data, value) => {
       data.textMesh.material.color = new Color(value >>> 8);
     }).getter((data) => Number.parseInt(`${data.textMesh.material.color.getHex().toString(16)}ff`, 16));
-    this.addPropertyNumber(ENTITY_PROPERTY, "speed", 0, 1, 2, 0.01, defaultProperties.uniforms.speed.value).group("text").setter((data, value) => {
-      data.properties.uniforms.speed.value = value;
-    }).getter((data) => data.properties.uniforms.speed.value);
-    this.addPropertyNumber(ENTITY_PROPERTY, "repeatX", 1, 100, 0, 0.01, defaultProperties.uniforms.repeatX.value).group("text").setter((data, value) => {
-      data.properties.uniforms.repeatX.value = value;
-    }).getter((data) => data.properties.uniforms.repeatX.value);
-    this.addPropertyNumber(ENTITY_PROPERTY, "repeatY", 1, 100, 0, 0.01, defaultProperties.uniforms.repeatY.value).group("text").setter((data, value) => {
-      data.properties.uniforms.repeatY.value = value;
-    }).getter((data) => data.properties.uniforms.repeatY.value);
+    this.addPropertyNumber(ENTITY_PROPERTY, "speed", 0, 1, 2, 0.01, DEFAULTS.speed).group("text").setter((data, value) => {
+      data.properties.speed.value = value;
+    }).getter((data) => data.properties.speed.value);
+    this.addPropertyNumber(ENTITY_PROPERTY, "repeatX", 1, 100, 0, 0.01, DEFAULTS.repeatX).group("text").setter((data, value) => {
+      data.properties.repeatX.value = value;
+    }).getter((data) => data.properties.repeatX.value);
+    this.addPropertyNumber(ENTITY_PROPERTY, "repeatY", 1, 100, 0, 0.01, DEFAULTS.repeatY).group("text").setter((data, value) => {
+      data.properties.repeatY.value = value;
+    }).getter((data) => data.properties.repeatY.value);
   }
   addMeshProperties() {
-    this.addPropertyColor(ENTITY_PROPERTY, "meshColor", defaultProperties.text.color).group("mesh").setter((data, value) => {
+    this.addPropertyColor(ENTITY_PROPERTY, "meshColor", DEFAULTS.meshColor).group("mesh").setter((data, value) => {
       data.renderTarget.scene.background = new Color(value >>> 8);
     }).getter((data) => Number.parseInt(`${data.renderTarget.scene.background.getHex().toString(16)}ff`, 16));
-    this.addPropertyNumber(ENTITY_PROPERTY, "metalness", 0, 1, 2, 0.01, defaultProperties.mesh.metalness).group("mesh").setter((data, value) => {
+    this.addPropertyNumber(ENTITY_PROPERTY, "metalness", 0, 1, 2, 0.01, DEFAULTS.metalness).group("mesh").setter((data, value) => {
       data.component.material.metalness = value;
     }).getter((data) => data.component.material.metalness);
-    this.addPropertyNumber(ENTITY_PROPERTY, "roughness", 0, 1, 2, 0.01, defaultProperties.mesh.roughness).group("mesh").setter((data, value) => {
+    this.addPropertyNumber(ENTITY_PROPERTY, "roughness", 0, 1, 2, 0.01, DEFAULTS.roughness).group("mesh").setter((data, value) => {
       data.component.material.roughness = value;
     }).getter((data) => data.component.material.roughness);
   }
   tick(parameters) {
     this.getEntities().forEach((entityName) => {
       const entityData = this.getEntity(entityName);
-      entityData.properties.uniforms.time.value = parameters.elapsedTime;
+      entityData.properties.time.value = parameters.elapsedTime;
     });
     super.tick(parameters);
   }

@@ -1421,9 +1421,12 @@ class GridInstances extends DigoAssetThree {
     });
   }
   updateGeometry(entityData) {
+    const previousSize = entityData.properties.size;
     getModelMesh(entityData.properties.objectId, entityData.properties.size, (mesh) => {
       entityData.gridInstances.geometry = mesh.geometry;
       entityData.originalGeometry = mesh.geometry;
+      const scaleFactor = entityData.properties.size / previousSize;
+      entityData.gridInstances.geometry.scale(scaleFactor, scaleFactor, scaleFactor);
       this.updatePivotPoint(entityData);
     });
   }
@@ -1469,9 +1472,9 @@ class GridInstances extends DigoAssetThree {
       data.updateGrid();
     }).getter((data) => data.properties.rows.value);
     this.addPropertyNumber(ENTITY_PROPERTY, "size", 0.01, Infinity, 2, 0.01, DEFAULTS.size).group("grid").setter((data, value) => {
-      data.gridInstances.geometry.scale(1 / data.properties.size, 1 / data.properties.size, 1 / data.properties.size);
+      const scaleFactor = value / data.properties.size;
       data.properties.size = value;
-      data.gridInstances.geometry.scale(data.properties.size, data.properties.size, data.properties.size);
+      data.gridInstances.geometry.scale(scaleFactor, scaleFactor, scaleFactor);
       data.updateGrid();
     }).getter((data) => data.properties.size);
     this.addPropertyNumber(ENTITY_PROPERTY, "space", 1e-3, Infinity, 2, 0.01, DEFAULTS.space).group("grid").setter((data, value) => {

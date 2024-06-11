@@ -5899,7 +5899,12 @@ class RapierUtils {
     return void 0;
   }
   addInstancePhysics(instancedMesh, index) {
-    const colliderDesc = this.getColliderDesc(instancedMesh.geometry);
+    const scaledMeshGeometry = new BufferGeometry();
+    scaledMeshGeometry.copy(instancedMesh.geometry);
+    const scale = new Vector3();
+    instancedMesh.getWorldScale(scale);
+    scaledMeshGeometry.scale(scale.x, scale.y, scale.z);
+    const colliderDesc = this.getColliderDesc(scaledMeshGeometry);
     const rigidBody = this.createInstanceRigidBody(instancedMesh, index);
     const collider = this.createCollider(colliderDesc, rigidBody);
     const instancePhysics = {
