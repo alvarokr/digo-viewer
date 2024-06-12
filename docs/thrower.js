@@ -6384,10 +6384,10 @@ class Thrower extends DigoAssetThree {
     this.addPropertyNumber(ENTITY_PROPERTY, "count", 1, DEFAULTS.maxCount, 0, 1, DEFAULTS.count).group("thrower").setter((data, value) => {
       data.properties.count = value;
     }).getter((data) => data.properties.count);
-    this.addPropertyNumber(ENTITY_PROPERTY, "lifeTime", 0, 60, 2, 0.01, DEFAULTS.lifeTime).group("thrower").setter((data, value) => {
+    this.addPropertyNumber(ENTITY_PROPERTY, "lifeTime", 0, Infinity, 2, 0.01, DEFAULTS.lifeTime).group("thrower").setter((data, value) => {
       data.properties.lifeTime = value;
     }).getter((data) => data.properties.lifeTime);
-    this.addPropertyNumber(ENTITY_PROPERTY, "throwTime", 0, 60, 2, 0.01, DEFAULTS.throwTime).group("thrower").setter((data, value) => {
+    this.addPropertyNumber(ENTITY_PROPERTY, "throwTime", 0, Infinity, 2, 0.01, DEFAULTS.throwTime).group("thrower").setter((data, value) => {
       data.properties.throwTime = value;
     }).getter((data) => data.properties.throwTime);
     this.addPropertyNumber(ENTITY_PROPERTY, "fadeTime", 0, 2, 2, 0.01, DEFAULTS.fadeTime).group("thrower").setter((data, value) => {
