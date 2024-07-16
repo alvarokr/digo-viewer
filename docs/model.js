@@ -6225,9 +6225,9 @@ class EntityData extends AssetEntityData {
       skeleton: DEFAULTS.skeleton,
       blendingPercent: DEFAULTS.blendingPercent,
       animationsSpeed: DEFAULTS.animationsSpeed,
-      blends: DEFAULTS.blends,
-      animations: DEFAULTS.animations,
-      morphs: DEFAULTS.morphs
+      blends: [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
+      animations: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      morphs: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     };
     this.importedModel = new ImportedModel(RAPIER_UTILS);
     this.previousScale = new Vector3();
@@ -6276,8 +6276,6 @@ class Model extends DigoAssetThree {
     this.addAnimationsControlProperties();
     this.addBlendingProperties();
     this.addMorphsProperties();
-    DEFAULTS.morphs.forEach((_2, index) => {
-    });
   }
   addMeshProperties() {
     this.addPropertyObject3D(ENTITY_PROPERTY, "geometry").group("mesh").setter((data, value) => {
